@@ -34,7 +34,8 @@ class Order:
 
     # ----------------------------------- Initializing -----------------------------------
 
-    def __init__(self, callback: Callable, orderID: int, clientID: int, _type: Enum, side: Enum, symbol: str, quantity, price):
+    def __init__(self, callback: Callable, orderID: int, clientID: int, _type: Enum, side: Enum, symbol: str, quantity,
+                 price):
         """
         Initialize the Order object
         """
@@ -76,7 +77,8 @@ class BinanceClient:
     # ----------------------------------- Initializing -----------------------------------
 
     def __init__(self, ID: int, start_kline_socket_: Callable, stop_kline_socket_: Callable,
-                 get_asset_balances_: Callable, add_account_balance_: Callable):
+                 get_asset_balances_: Callable, add_account_balance_: Callable, create_mkt_order: Callable,
+                 create_lmt_order: Callable, close_order_: Callable):
         """
         Used by the BinanceBroker to initialize the BinanceClient.
 
@@ -90,6 +92,9 @@ class BinanceClient:
         self.stop_kline_socket_ = stop_kline_socket_
         self.get_asset_balances_ = get_asset_balances_
         self.add_account_balance_ = add_account_balance_
+        self.create_mkt_order = create_mkt_order
+        self.create_lmt_order = create_lmt_order
+        self.close_order_ = close_order_
 
     # ----------------------------------- Starting and Stopping Sockets -----------------------------------
 
@@ -128,6 +133,42 @@ class BinanceClient:
         """
         self.add_account_balance_(self.ID, asset, amount_added)
 
+    # ----------------------------------- Order Methods -----------------------------------
+
+    def create_order(self, _type: Enum, quantity, symbol: str, side: Enum, callback: Callable, price=None):
+        """
+        Uses callbacks to send order to binance
+
+        :param callback: The callback function to be used to notify of execution
+        :param type: The type of the order (MKT, LMT, ...)
+        :param quantity: The quantity wanting to purchase/sell
+        :param symbol: Symbol to be traded
+        :param side: The side of the order (BID/ASK)
+        :param price: If LMT order define the limit price
+        :return: The orderID of the trade
+        """
+        if _type == Enums.TYPE_MKT:
+            # Send market order
+            self.create_mkt_order(clientID=self.ID, symbol=symbol, quantity=quantity, side=side, callback=callback)
+        elif _type == Enums.TYPE_LMT:
+            # Check price is specified
+            if price is None:
+                raise ValueError("Tried to send a limit order but did not specify limit price")
+
+            # Send limit order
+            self.create_lmt_order(clientID=self.ID, symbol=symbol, quantity=quantity, side=side, callback=callback,
+                                  lmt_price=price)
+        else:
+            # Raise ValueError if type cannot be found
+            raise ValueError("Tried to send order but order type was not recognised: type={}".format(_type))
+
+    def close_order(self, orderID: int):
+        """
+        Sends request to close order on exchange
+
+        :param orderID: The ID of the order ot be closed
+        """
+        self.close_order_(orderID=orderID)
 
 class BinanceBroker:
     """
@@ -164,6 +205,9 @@ class BinanceBroker:
         # Dictionaries to hold asks and bids
         self.asks = dict()                                  # { ..., 'symbol' : { ..., price : [ ..., order, ... ], ... }, ... }
         self.bids = dict()                                  # { ..., 'symbol' : { ..., price : [ ..., order, ... ], ... }, ... }
+
+        # Dictionary that stores orderIDs and corresponding order objects
+        self.orders = dict()                                 # { ..., orderID : order, ... }
 
     # ----------------------------------- Obtaining Linked Client method -----------------------------------
 
@@ -413,6 +457,9 @@ class BinanceBroker:
         # Add to market orders list
         self.mkt_orders.append(order)
 
+        # Add order to orderID list
+        self.orders[order.orderID] = order
+
         # Return orderID or order
         return order.orderID
 
@@ -467,10 +514,29 @@ class BinanceBroker:
             else:
                 self.bids[symbol][order.lmt_price] = [order]
 
+        # Add order to orderID list
+        self.orders[order.orderID] = order
+
         # Return orderID or order
         return order.orderID
 
     # ----------------------------------- Order Removing -----------------------------------
+
+    def close_order(self, orderID: int):
+        """
+        External method called by BinanceClient to close an order
+
+        :param orderID: The ID of the order to be closed
+        """
+        # Check if orderID exists
+        if orderID not in self.orders:
+            raise ValueError("Tried to remove order that doesn't exist")
+
+        # Get order
+        order = self.orders[orderID]
+
+        # Remove order
+        self.remove_order(order)
 
     def remove_order(self, order: Order):
         """
@@ -501,6 +567,9 @@ class BinanceBroker:
                     if self.asks[order.lmt_price][i].orderID == order.orderID:
                         self.asks[order.lmt_price].pop(i)
                         return
+
+        # Remove order from orders list
+        self.orders.pop(order.orderID)
 
     # -----------------------------------------------------------------------------------------------
     # ----------------------------------- Backtester interactions -----------------------------------
