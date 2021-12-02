@@ -402,7 +402,7 @@ class BinanceBroker:
 
     # ----------------------------------- Internal market data methods -----------------------------------
 
-    def get_price(self, symbol: str, side: Enum):
+    def get_price(self, symbol: str, side=None):
         """
         Internal method to get the price of symbol. (should only be used to by for create_mkt_order)
          - The open price is used currently as only klines are used. Ideally kline and tick data would be used so that
@@ -578,7 +578,7 @@ class BinanceBroker:
 
     # ----------------------------------- Order checking and execution -----------------------------------
 
-    def check_order(self, symbol: str):
+    def check_orders(self, symbol: str):
         """
         Called by the backtester to
 
@@ -588,23 +588,30 @@ class BinanceBroker:
         price = self.get_price(symbol)
 
         # Get valid bids and asks
-        valid_asks = get_keys_below(self.asks[symbol], price)
-        valid_bids = get_keys_above(self.bids[symbol], price)
+        valid_asks = None
+        if symbol in self.asks:
+            valid_asks = get_keys_below(self.asks[symbol], price)
+
+        valid_bids = None
+        if symbol in self.bids:
+            valid_bids = get_keys_above(self.bids[symbol], price)
 
         # Execute valid bids and asks
-        for order in valid_bids.values():
-            # Execute order
-            self.exec_order(order=order, price=price)
+        if valid_bids is not None:
+            for order in valid_bids.values():
+                # Execute order
+                self.exec_order(order=order, price=price)
 
-            # Remove order
-            self.remove_order(order=order)
+                # Remove order
+                self.remove_order(order=order)
 
-        for order in valid_asks.values():
-            # Execute order
-            self.exec_order(order=order, price=price)
+        if valid_asks is not None:
+            for order in valid_asks.values():
+                # Execute order
+                self.exec_order(order=order, price=price)
 
-            # Remove order
-            self.remove_order(order=order)
+                # Remove order
+                self.remove_order(order=order)
 
         # Execute market orders
         for order in self.mkt_orders:
