@@ -230,7 +230,7 @@ class BinanceBroker:
         # Return client
         return client
 
-    # Account Info methods
+    # ----------------------------------- Account Info methods -----------------------------------
 
     def get_asset_balances(self, clientID: int):
         """
