@@ -170,6 +170,7 @@ class BinanceClient:
         """
         self.close_order_(orderID=orderID)
 
+
 class BinanceBroker:
     """
     Emulation of the Binance Cryptocurrency exchange.
