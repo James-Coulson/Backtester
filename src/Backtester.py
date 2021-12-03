@@ -16,9 +16,12 @@ class Backtester:
 
     # ----------------------------------- Initializing -----------------------------------
 
-    def __init__(self, symbols_required: list):
+    def __init__(self, start_date: str, end_date: str, symbols_required: list):
         """
         Initializes the brokers and the Logger
+
+        :param start_date: Beginning date of the backtest (format: DD-MM-YYY)
+        :param end_date: Ending date of the backtest (format: DD-MM-YYY)
         """
         # Saving required symbols
         self.symbols_required = symbols_required
