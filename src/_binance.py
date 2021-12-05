@@ -52,7 +52,7 @@ class Order:
         self._type = _type                              # Type of the order
 
         if _type == Enums.TYPE_MKT:                     # <- Order is a market order
-            pass
+            self.locked_price = None                    # Price used for locked order
         elif _type == Enums.TYPE_LMT:                   # <- Order is a limit order
             self.lmt_price = price                      # Limit price of order
         else:
@@ -71,6 +71,14 @@ class Order:
             return self.quantity * price
         elif self._type == Enums.TYPE_LMT:              # Order is a limit order
             return self.quantity * self.lmt_price
+
+    def set_price(self, price):
+        """
+        Used to set the price used to lock assets for order (only for market data)
+
+        :param price: Price used for locked amount
+        """
+        self.locked_price = price
 
 # ----------------------------------- Binance Client -----------------------------------
 
@@ -513,8 +521,8 @@ class BinanceBroker:
         # - For now the case where no market data is available is ignored
         if order.side == Enums.SIDE_BID:
             self.change_locked_asset_balance(clientID=order.clientID, asset=assets[0],
-                                             change=order.get_value(price=self.get_price(symbol=symbol,
-                                                                                         side=Enums.SIDE_BID)))
+                                             change=order.get_value(price=self.get_price(symbol=symbol)))
+            order.set_price(price=self.get_price(symbol=symbol))
         elif order.side == Enums.SIDE_ASK:
             self.change_locked_asset_balance(clientID=order.clientID, asset=assets[1], change=order.quantity)
         else:
@@ -665,7 +673,11 @@ class BinanceBroker:
         # Change account balances
         if order.side == Enums.SIDE_BID:
             # Decrease locked amount by order value
-            self.change_locked_asset_balance(clientID=order.clientID, asset=assets[0], change=-order.get_value())
+            if order._type == Enums.TYPE_MKT:
+                self.change_locked_asset_balance(clientID=order.clientID, asset=assets[0],
+                                                 change=-order.get_value(price=order.locked_price))
+            else:
+                self.change_locked_asset_balance(clientID=order.clientID, asset=assets[0], change=-order.get_value())
             # Decrease sold asset amount
             self.change_total_asset_balance(clientID=order.clientID, asset=assets[0], change=-(order.quantity * price))
             # Increase purchased asset amount
