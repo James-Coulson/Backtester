@@ -637,71 +637,19 @@ class BinanceBroker:
         # Remove order from orders list
         self.orders.pop(order.orderID)
 
-    # -----------------------------------------------------------------------------------------------
-    # ----------------------------------- Backtester interactions -----------------------------------
-    # -----------------------------------------------------------------------------------------------
-
-    # ----------------------------------- Order checking and execution -----------------------------------
-
-    def check_orders(self, symbol: str):
-        """
-        Called by the backtester to
-
-        :param symbol: Symbol that was most recently updated
-        """
-        # Get price of symbol
-        price = self.get_price(symbol)
-
-        # Get valid bids and asks
-        valid_asks = None
-        if symbol in self.asks:
-            valid_asks = get_keys_below(self.asks[symbol], price)
-
-        valid_bids = None
-        if symbol in self.bids:
-            valid_bids = get_keys_above(self.bids[symbol], price)
-
-        # Execute valid bids and asks
-        if valid_bids is not None:
-            for order in valid_bids.values():
-                # Get commission
-                comm = self.calc_commission(order=order, price=price, maker=True)
-
-                # Execute order
-                self.exec_order(order=order, price=price, commission=comm)
-
-                # Remove order
-                self.remove_order(order=order)
-
-        if valid_asks is not None:
-            for order in valid_asks.values():
-                # Get commission
-                comm = self.calc_commission(order=order, price=price, maker=True)
-
-                # Execute order
-                self.exec_order(order=order, price=price, commission=comm)
-
-                # Remove order
-                self.remove_order(order=order)
-
-        # Execute market orders
-        for order in self.mkt_orders:
-            # Get commission
-            comm = self.calc_commission(order=order, price=price, maker=False)
-
-            # Execute order
-            self.exec_order(order=order, price=price, commission=self.COMMISSIONS['taker'])
-
-        # Clear market orders
-        self.mkt_orders = []
+    # ----------------------------------- Order Execution -----------------------------------
 
     def exec_order(self, order: Order, price, commission):
         """
         Used to execute an order
 
+        :param commission: The commission for the order
         :param order: Order to be executed
         :param price: Price at which the order is executed
         """
+        # Adjusting price for slippage
+        price = self.calc_slippage(price=price, symbol=order.symbol)
+
         # Create execution dictionary
         execution = dict()
         execution['price'] = price
@@ -735,6 +683,21 @@ class BinanceBroker:
 
         # Execute callback function
         order.callback(execution)
+
+    # ----------------------------------- Slippage Calculation -----------------------------------
+
+    def calc_slippage(self, price, symbol: str):
+        """
+        Used to change the execution price to take into account slippage. Only takes into account slippage
+        caused by large order volumes.
+         - For now it does not do anything as orderbook data will be needed to determine slippage.
+         .0
+
+        :param price: The unadjusted execution price
+        :param symbol: The symbol of the order being executed
+        :return: The adjusted execution price
+        """
+        return price
 
     # ----------------------------------- Commission Methods -----------------------------------
 
@@ -783,6 +746,64 @@ class BinanceBroker:
             self.commissions[clientID][asset] = commission
         else:
             self.commissions[clientID][asset] += commission
+
+    # -----------------------------------------------------------------------------------------------
+    # ----------------------------------- Backtester interactions -----------------------------------
+    # -----------------------------------------------------------------------------------------------
+
+    # ----------------------------------- Order checking -----------------------------------
+
+    def check_orders(self, symbol: str):
+        """
+        Called by the backtester to
+
+        :param symbol: Symbol that was most recently updated
+        """
+        # Get price of symbol
+        price = self.get_price(symbol)
+
+        # Get valid bids and asks
+        valid_asks = None
+        if symbol in self.asks:
+            valid_asks = get_keys_below(self.asks[symbol], price)
+
+        valid_bids = None
+        if symbol in self.bids:
+            valid_bids = get_keys_above(self.bids[symbol], price)
+
+        # Execute valid bids and asks
+        if valid_bids is not None:
+            for order in valid_bids.values():
+                # Get commission
+                comm = self.calc_commission(order=order, price=price, maker=True)
+
+                # Execute order
+                self.exec_order(order=order, price=price, commission=comm)
+
+                # Remove order
+                self.remove_order(order=order)
+
+        if valid_asks is not None:
+            for order in valid_asks.values():
+                # Get commission
+                comm = self.calc_commission(order=order, price=price, maker=True)
+
+                # Execute order
+                self.exec_order(order=order, price=price, commission=comm)
+
+                # Remove order
+                self.remove_order(order=order)
+
+        # Execute market orders
+        for order in self.mkt_orders:
+            # Get commission
+            comm = self.calc_commission(order=order, price=price, maker=False)
+
+            # Execute order
+            self.exec_order(order=order, price=price, commission=comm)
+
+        # Clear market orders
+        self.mkt_orders = []
 
     # ----------------------------------- Updating market data -----------------------------------
 
