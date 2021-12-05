@@ -10,6 +10,8 @@ NOTES:
 -> Only market and limit orders are supported
 """
 
+# ----------------------------------- Enums -----------------------------------
+
 
 class Enums(Enum):
     """
@@ -25,6 +27,8 @@ class Enums(Enum):
 
     TYPE_MKT = 0                                        # Order is a market order
     TYPE_LMT = 1                                        # Order is a limit order
+
+# ----------------------------------- Order Data Structure
 
 
 class Order:
@@ -67,6 +71,8 @@ class Order:
             return self.quantity * price
         elif self._type == Enums.TYPE_LMT:              # Order is a limit order
             return self.quantity * self.lmt_price
+
+# ----------------------------------- Binance Client -----------------------------------
 
 
 class BinanceClient:
@@ -181,6 +187,8 @@ class BinanceClient:
         """
         self.close_order_(orderID=orderID)
 
+# ----------------------------------- Binance Broker -----------------------------------
+
 
 class BinanceBroker:
     """
@@ -224,6 +232,9 @@ class BinanceBroker:
 
         # Dictionary to store commissions for each client
         self.commissions = dict()                           # { ..., clientID : { ..., 'asset' :  commission, ... }, ... }
+
+        # Dictionary to store trade data
+        self.trades = dict()                                # { ..., 'symbol' : trade_dict, ... }
 
     # ----------------------------------- Obtaining Linked Client method -----------------------------------
 
@@ -437,14 +448,11 @@ class BinanceBroker:
 
     # ----------------------------------- Internal market data methods -----------------------------------
 
-    def get_price(self, symbol: str, side=None):
+    def get_price(self, symbol: str):
         """
-        Internal method to get the price of symbol. (should only be used to by for create_mkt_order)
-         - The open price is used currently as only klines are used. Ideally kline and tick data would be used so that
-         kline data is sent to strategies and trade/order book data is used to evaluate orders.
+        Internal method to get the price of symbol.
          - This is assumed it is called after the market data is updated
         :param symbol: Symbol of price that is needed
-        :param side: Side needed (not currently implemented as no order book data is used)
         :return: Price of symbol if market data is available and -1 otherwise
         """
         # Symbol not on Binance
@@ -452,11 +460,33 @@ class BinanceBroker:
             raise ValueError("Tried to get price of symbol not on Binance: symbol={}".format(symbol))
 
         # No market data available
-        if symbol not in self.klines:
+        if symbol not in self.trades:
             return -1
 
         # Returns open price
-        return self.klines[symbol]['open']
+        return self.trades[symbol]['avgPrice']
+
+    def get_quantity(self, symbol: str, quote=False):
+        """
+        Used to get the quantity traded
+
+        :param symbol: The symbol to get the data for
+        :param quote: If the quantity or the quoted quantity is returned
+        :return: The quantity traded and -1 if no data is available
+        """
+        # Symbol not on Binance
+        if symbol not in self.SYMBOLS:
+            raise ValueError("Tried to get quantity of symbol not on Binance: symbol={}".format(symbol))
+
+        # No market data available
+        if symbol not in self.trades:
+            return -1
+
+        # Return quantity
+        if quote is False:
+            return self.trades[symbol]['quantity']
+        else:
+            return self.trades[symbol]['quoteQty']
 
     # ----------------------------------- Order receiving -----------------------------------
 
@@ -746,7 +776,7 @@ class BinanceBroker:
         """
         # Check if asset exists
         if asset not in self.ASSETS:
-            raise ValueError("Trieed to add commission of asset that isn't traded on Binance")
+            raise ValueError("Tried to add commission of asset that isn't traded on Binance")
 
         # Add commissions to dictionary
         if asset not in self.commissions[clientID]:
@@ -755,6 +785,14 @@ class BinanceBroker:
             self.commissions[clientID][asset] += commission
 
     # ----------------------------------- Updating market data -----------------------------------
+
+    def update_trade_data(self, trades: dict):
+        """
+        Called by Backtester
+
+        :param trades: The trade dictionary
+        """
+        self.trades[trades['symbol']] = trades
 
     def update_klines(self, symbol: str, klines: dict):
         """
