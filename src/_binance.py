@@ -10,6 +10,8 @@ NOTES:
 -> Only market and limit orders are supported
 """
 
+# ----------------------------------- Enums -----------------------------------
+
 
 class Enums(Enum):
     """
@@ -25,6 +27,8 @@ class Enums(Enum):
 
     TYPE_MKT = 0                                        # Order is a market order
     TYPE_LMT = 1                                        # Order is a limit order
+
+# ----------------------------------- Order Data Structure
 
 
 class Order:
@@ -48,7 +52,7 @@ class Order:
         self._type = _type                              # Type of the order
 
         if _type == Enums.TYPE_MKT:                     # <- Order is a market order
-            pass
+            self.locked_price = None                    # Price used for locked order
         elif _type == Enums.TYPE_LMT:                   # <- Order is a limit order
             self.lmt_price = price                      # Limit price of order
         else:
@@ -68,6 +72,16 @@ class Order:
         elif self._type == Enums.TYPE_LMT:              # Order is a limit order
             return self.quantity * self.lmt_price
 
+    def set_price(self, price):
+        """
+        Used to set the price used to lock assets for order (only for market data)
+
+        :param price: Price used for locked amount
+        """
+        self.locked_price = price
+
+# ----------------------------------- Binance Client -----------------------------------
+
 
 class BinanceClient:
     """
@@ -78,7 +92,7 @@ class BinanceClient:
 
     def __init__(self, ID: int, start_kline_socket_: Callable, stop_kline_socket_: Callable,
                  get_asset_balances_: Callable, add_account_balance_: Callable, create_mkt_order: Callable,
-                 create_lmt_order: Callable, close_order_: Callable):
+                 create_lmt_order: Callable, close_order_: Callable, get_commissions_: Callable):
         """
         Used by the BinanceBroker to initialize the BinanceClient.
 
@@ -95,6 +109,7 @@ class BinanceClient:
         self.create_mkt_order = create_mkt_order
         self.create_lmt_order = create_lmt_order
         self.close_order_ = close_order_
+        self.get_commissions_ = get_commissions_
 
     # ----------------------------------- Starting and Stopping Sockets -----------------------------------
 
@@ -121,8 +136,10 @@ class BinanceClient:
     def get_asset_balances(self):
         """
         Uses callback method to get asset balances
+
+        :return: Dictionary of asset balances
         """
-        self.get_asset_balances_(self.ID)
+        return self.get_asset_balances_(self.ID)
 
     def add_account_balance(self, asset: str, amount_added):
         """
@@ -133,6 +150,14 @@ class BinanceClient:
         """
         self.add_account_balance_(self.ID, asset, amount_added)
 
+    def get_commissions(self):
+        """
+        Uses callback to get account commissions
+
+        :return: Dictionary of commissions
+        """
+        return self.get_commissions_(self.ID)
+
     # ----------------------------------- Order Methods -----------------------------------
 
     def create_order(self, _type: Enum, quantity, symbol: str, side: Enum, callback: Callable, price=None):
@@ -140,7 +165,7 @@ class BinanceClient:
         Uses callbacks to send order to binance
 
         :param callback: The callback function to be used to notify of execution
-        :param type: The type of the order (MKT, LMT, ...)
+        :param _type: The type of the order (MKT, LMT, ...)
         :param quantity: The quantity wanting to purchase/sell
         :param symbol: Symbol to be traded
         :param side: The side of the order (BID/ASK)
@@ -156,8 +181,8 @@ class BinanceClient:
                 raise ValueError("Tried to send a limit order but did not specify limit price")
 
             # Send limit order
-            self.create_lmt_order(clientID=self.ID, symbol=symbol, quantity=quantity, side=side, callback=callback,
-                                  lmt_price=price)
+            return self.create_lmt_order(clientID=self.ID, symbol=symbol, quantity=quantity, side=side,
+                                         callback=callback, lmt_price=price)
         else:
             # Raise ValueError if type cannot be found
             raise ValueError("Tried to send order but order type was not recognised: type={}".format(_type))
@@ -170,16 +195,20 @@ class BinanceClient:
         """
         self.close_order_(orderID=orderID)
 
+# ----------------------------------- Binance Broker -----------------------------------
+
 
 class BinanceBroker:
     """
     Emulation of the Binance Cryptocurrency exchange.
     """
 
-    # ----------------------------------- Assets and Symbols -----------------------------------
+    # ----------------------------------- Exchange Constants -----------------------------------
 
     ASSETS = ['USDT', 'BTC']                            # List of assets that can be traded on Binance
     SYMBOLS = ['BTCUSDT']                               # List of symbols that are available on Binance
+    COMMISSIONS = {'maker': 0.001, 'taker': 0.001}      # Dictionary for commissions
+    INTERVALS = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '1d', '3d', '1w', '1M']  # Intervals offered by Binance
 
     # ----------------------------------- Initializing -----------------------------------
 
@@ -208,7 +237,13 @@ class BinanceBroker:
         self.bids = dict()                                  # { ..., 'symbol' : { ..., price : [ ..., order, ... ], ... }, ... }
 
         # Dictionary that stores orderIDs and corresponding order objects
-        self.orders = dict()                                 # { ..., orderID : order, ... }
+        self.orders = dict()                                # { ..., orderID : order, ... }
+
+        # Dictionary to store commissions for each client
+        self.commissions = dict()                           # { ..., clientID : { ..., 'asset' :  commission, ... }, ... }
+
+        # Dictionary to store trade data
+        self.trades = dict()                                # { ..., 'symbol' : trade_dict, ... }
 
     # ----------------------------------- Obtaining Linked Client method -----------------------------------
 
@@ -219,7 +254,10 @@ class BinanceBroker:
         :return: Linked BinanceClient
         """
         # Create BinanceClient
-        client = BinanceClient(self.clientID)
+        client = BinanceClient(self.clientID, start_kline_socket_=self.start_kline_socket,
+                               stop_kline_socket_=self.stop_kline_socket, get_asset_balances_=self.get_asset_balances,
+                               add_account_balance_=self.add_account_balance, create_mkt_order=self.create_mkt_order,
+                               create_lmt_order=self.create_lmt_order, close_order_=self.close_order)
 
         # Increment clientID counter
         self.clientID += 1
@@ -227,10 +265,27 @@ class BinanceBroker:
         # Initializing asset_balances
         self.asset_balances[client.ID] = dict()
 
+        # Initializing commission balance
+        self.commissions[client.ID] = dict()
+
         # Return client
         return client
 
     # ----------------------------------- Account Info methods -----------------------------------
+
+    def get_commissions(self, clientID: int):
+        """
+        Returns the commissions dictionary of a client
+
+        :param clientID: The ID of the client whose commissions are returned
+        :return: The corresponding commissions dictionary
+        """
+        # Check if client ID is in commissions
+        if clientID not in self.commissions:
+            raise ValueError("Tried to get commissions of clientID that doesn;t exist")
+
+        # Return commissions dictionary
+        return self.commissions[clientID]
 
     def get_asset_balances(self, clientID: int):
         """
@@ -402,14 +457,11 @@ class BinanceBroker:
 
     # ----------------------------------- Internal market data methods -----------------------------------
 
-    def get_price(self, symbol: str, side: Enum):
+    def get_price(self, symbol: str):
         """
-        Internal method to get the price of symbol. (should only be used to by for create_mkt_order)
-         - The open price is used currently as only klines are used. Ideally kline and tick data would be used so that
-         kline data is sent to strategies and trade/order book data is used to evaluate orders.
+        Internal method to get the price of symbol.
          - This is assumed it is called after the market data is updated
         :param symbol: Symbol of price that is needed
-        :param side: Side needed (not currently implemented as no order book data is used)
         :return: Price of symbol if market data is available and -1 otherwise
         """
         # Symbol not on Binance
@@ -417,11 +469,33 @@ class BinanceBroker:
             raise ValueError("Tried to get price of symbol not on Binance: symbol={}".format(symbol))
 
         # No market data available
-        if symbol not in self.klines:
+        if symbol not in self.trades:
             return -1
 
         # Returns open price
-        return self.klines[symbol]['open']
+        return self.trades[symbol]['avgPrice']
+
+    def get_quantity(self, symbol: str, quote=False):
+        """
+        Used to get the quantity traded
+
+        :param symbol: The symbol to get the data for
+        :param quote: If the quantity or the quoted quantity is returned
+        :return: The quantity traded and -1 if no data is available
+        """
+        # Symbol not on Binance
+        if symbol not in self.SYMBOLS:
+            raise ValueError("Tried to get quantity of symbol not on Binance: symbol={}".format(symbol))
+
+        # No market data available
+        if symbol not in self.trades:
+            return -1
+
+        # Return quantity
+        if quote is False:
+            return self.trades[symbol]['quantity']
+        else:
+            return self.trades[symbol]['quoteQty']
 
     # ----------------------------------- Order receiving -----------------------------------
 
@@ -448,8 +522,8 @@ class BinanceBroker:
         # - For now the case where no market data is available is ignored
         if order.side == Enums.SIDE_BID:
             self.change_locked_asset_balance(clientID=order.clientID, asset=assets[0],
-                                             change=order.get_value(price=self.get_price(symbol=symbol,
-                                                                                         side=Enums.SIDE_BID)))
+                                             change=order.get_value(price=self.get_price(symbol=symbol)))
+            order.set_price(price=self.get_price(symbol=symbol))
         elif order.side == Enums.SIDE_ASK:
             self.change_locked_asset_balance(clientID=order.clientID, asset=assets[1], change=order.quantity)
         else:
@@ -572,55 +646,19 @@ class BinanceBroker:
         # Remove order from orders list
         self.orders.pop(order.orderID)
 
-    # -----------------------------------------------------------------------------------------------
-    # ----------------------------------- Backtester interactions -----------------------------------
-    # -----------------------------------------------------------------------------------------------
+    # ----------------------------------- Order Execution -----------------------------------
 
-    # ----------------------------------- Order checking and execution -----------------------------------
-
-    def check_order(self, symbol: str):
-        """
-        Called by the backtester to
-
-        :param symbol: Symbol that was most recently updated
-        """
-        # Get price of symbol
-        price = self.get_price(symbol)
-
-        # Get valid bids and asks
-        valid_asks = get_keys_below(self.asks[symbol], price)
-        valid_bids = get_keys_above(self.bids[symbol], price)
-
-        # Execute valid bids and asks
-        for order in valid_bids.values():
-            # Execute order
-            self.exec_order(order=order, price=price)
-
-            # Remove order
-            self.remove_order(order=order)
-
-        for order in valid_asks.values():
-            # Execute order
-            self.exec_order(order=order, price=price)
-
-            # Remove order
-            self.remove_order(order=order)
-
-        # Execute market orders
-        for order in self.mkt_orders:
-            # Execute order
-            self.exec_order(order=order, price=price)
-
-        # Clear market orders
-        self.mkt_orders = []
-
-    def exec_order(self, order: Order, price):
+    def exec_order(self, order: Order, price, commission):
         """
         Used to execute an order
 
+        :param commission: The commission for the order
         :param order: Order to be executed
         :param price: Price at which the order is executed
         """
+        # Adjusting price for slippage
+        price = self.calc_slippage(price=price, symbol=order.symbol)
+
         # Create execution dictionary
         execution = dict()
         execution['price'] = price
@@ -628,7 +666,7 @@ class BinanceBroker:
         execution['orderID'] = order.orderID
         execution['symbol'] = order.symbol
         execution['side'] = order.side
-        execution['commission'] = 0
+        execution['commission'] = commission
 
         # Get assets involved
         assets = split_symbol(order.symbol, self.ASSETS)
@@ -636,7 +674,11 @@ class BinanceBroker:
         # Change account balances
         if order.side == Enums.SIDE_BID:
             # Decrease locked amount by order value
-            self.change_locked_asset_balance(clientID=order.clientID, asset=assets[0], change=-order.get_value())
+            if order._type == Enums.TYPE_MKT:
+                self.change_locked_asset_balance(clientID=order.clientID, asset=assets[0],
+                                                 change=-order.get_value(price=order.locked_price))
+            else:
+                self.change_locked_asset_balance(clientID=order.clientID, asset=assets[0], change=-order.get_value())
             # Decrease sold asset amount
             self.change_total_asset_balance(clientID=order.clientID, asset=assets[0], change=-(order.quantity * price))
             # Increase purchased asset amount
@@ -649,10 +691,142 @@ class BinanceBroker:
             # Increase purchased asset amount
             self.change_total_asset_balance(clientID=order.clientID, asset=assets[0], change=(order.quantity * price))
 
+        # Add commissions
+        self.add_commission(clientID=order.clientID, asset=assets[0], commission=commission)
+
         # Execute callback function
         order.callback(execution)
 
+    # ----------------------------------- Slippage Calculation -----------------------------------
+
+    def calc_slippage(self, price, symbol: str):
+        """
+        Used to change the execution price to take into account slippage. Only takes into account slippage
+        caused by large order volumes.
+         - For now it does not do anything as orderbook data will be needed to determine slippage.
+         .0
+
+        :param price: The unadjusted execution price
+        :param symbol: The symbol of the order being executed
+        :return: The adjusted execution price
+        """
+        return price
+
+    # ----------------------------------- Commission Methods -----------------------------------
+
+    def calc_commission(self, order, price, maker=True):
+        """
+        Used to calculate the commission for a given order
+
+        :param order: The order to calculate the commission of
+        :param price: The execution price
+        :param maker: If the order is a maker or a taker
+        :return: The commission price
+        """
+        # Get commission rate
+        if maker:
+            rate = self.COMMISSIONS['maker']
+        else:
+            rate = self.COMMISSIONS['taker']
+
+        # Get order value
+        if order._type == Enums.TYPE_MKT:
+            # Get value of order
+            value = order.get_value(price=price)
+        elif order._type == Enums.TYPE_LMT:
+            # Get value of order
+            value = order.quantity * price
+        else:
+            raise ValueError("Tried to calculate commission of order with unrecognised order type")
+
+        # Return commission
+        return value * rate
+
+    def add_commission(self, clientID: int, asset: str, commission):
+        """
+        Logs the commission paid for an order
+
+        :param clientID: The client who is paying commission
+        :param asset: The asset that the commission is paid in
+        :param commission: The commission amount
+        """
+        # Check if asset exists
+        if asset not in self.ASSETS:
+            raise ValueError("Tried to add commission of asset that isn't traded on Binance")
+
+        # Add commissions to dictionary
+        if asset not in self.commissions[clientID]:
+            self.commissions[clientID][asset] = commission
+        else:
+            self.commissions[clientID][asset] += commission
+
+    # -----------------------------------------------------------------------------------------------
+    # ----------------------------------- Backtester interactions -----------------------------------
+    # -----------------------------------------------------------------------------------------------
+
+    # ----------------------------------- Order checking -----------------------------------
+
+    def check_orders(self, symbol: str):
+        """
+        Called by the backtester to
+
+        :param symbol: Symbol that was most recently updated
+        """
+        # Get price of symbol
+        price = self.get_price(symbol)
+
+        # Get valid bids and asks
+        valid_asks = None
+        if symbol in self.asks:
+            valid_asks = get_keys_below(self.asks[symbol], price)
+
+        valid_bids = None
+        if symbol in self.bids:
+            valid_bids = get_keys_above(self.bids[symbol], price)
+
+        # Execute valid bids and asks
+        if valid_bids is not None:
+            for order in valid_bids.values():
+                # Get commission
+                comm = self.calc_commission(order=order, price=price, maker=True)
+
+                # Execute order
+                self.exec_order(order=order, price=price, commission=comm)
+
+                # Remove order
+                self.remove_order(order=order)
+
+        if valid_asks is not None:
+            for order in valid_asks.values():
+                # Get commission
+                comm = self.calc_commission(order=order, price=price, maker=True)
+
+                # Execute order
+                self.exec_order(order=order, price=price, commission=comm)
+
+                # Remove order
+                self.remove_order(order=order)
+
+        # Execute market orders
+        for order in self.mkt_orders:
+            # Get commission
+            comm = self.calc_commission(order=order, price=price, maker=False)
+
+            # Execute order
+            self.exec_order(order=order, price=price, commission=comm)
+
+        # Clear market orders
+        self.mkt_orders = []
+
     # ----------------------------------- Updating market data -----------------------------------
+
+    def update_trade_data(self, trades: dict):
+        """
+        Called by Backtester
+
+        :param trades: The trade dictionary
+        """
+        self.trades[trades['symbol']] = trades
 
     def update_klines(self, symbol: str, klines: dict):
         """
