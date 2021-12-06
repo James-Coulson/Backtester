@@ -5,10 +5,6 @@ from enum import Enum
 # User made imports
 from helper_funcs import split_symbol, get_keys_below, get_keys_above
 
-"""
-NOTES:
--> Only market and limit orders are supported
-"""
 
 # ----------------------------------- Enums -----------------------------------
 
