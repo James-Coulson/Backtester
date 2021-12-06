@@ -469,7 +469,7 @@ class BinanceBroker:
             return -1
 
         # Returns open price
-        return self.trades[symbol]['avgPrice']
+        return self.trades[symbol]['price']
 
     def get_quantity(self, symbol: str, quote=False):
         """
