@@ -207,7 +207,8 @@ class BinanceBroker:
 
     ASSETS = ['USDT', 'BTC']                            # List of assets that can be traded on Binance
     SYMBOLS = ['BTCUSDT']                               # List of symbols that are available on Binance
-    COMMISSIONS = {'maker': 0.001, 'taker': 0.001}    # Dictionary for commissions
+    COMMISSIONS = {'maker': 0.001, 'taker': 0.001}      # Dictionary for commissions
+    INTERVALS = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '1d', '3d', '1w', '1M']  # Intervals offered by Binance
 
     # ----------------------------------- Initializing -----------------------------------
 
