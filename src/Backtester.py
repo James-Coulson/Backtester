@@ -3,8 +3,9 @@ from zipfile import ZipFile
 import pandas as pd
 
 # Importing user-made libraries
-from _binance import BinanceBroker
-from helper_funcs import trade_data_collation
+from src._binance import BinanceBroker
+from src.helper_funcs import trade_data_collation
+
 
 class Backtester:
     """
@@ -110,6 +111,9 @@ class Backtester:
             # Send trade data to BinanceBroker
             self.send_trade_data_to_binance(row=row)
 
+            # Check orders in binance
+            self.brokers['binance'].check_orders(symbol=row['symbol'])
+
             # When trade data interval overlaps with kline data, send kline data to broker
             while self.kline_data.iloc[kline_num]["close time"] <= self.time and kline_num < len(self.kline_data):
                 # Get row and increment kline counter
@@ -118,9 +122,6 @@ class Backtester:
 
                 # Send data to binance
                 self.send_data_to_binance(row=kline_row)
-
-                # Check orders in binance
-                self.brokers['binance'].check_orders(symbol='BTCUSDT')
 
                 # Send new market data
                 self.brokers['binance'].send_mkt_data(symbol='BTCUSDT')
@@ -147,7 +148,8 @@ class Backtester:
         # Give data to BinanceBroker
         self.brokers['binance'].update_klines(symbol='BTCUSDT', klines=mkt_data)
 
-# ----------------------------------- Sending Trade Data ----------------------------------------
+    # ----------------------------------- Sending Trade Data ----------------------------------------
+
     def send_trade_data_to_binance(self, row):
         """
         Gets input row of trade data and gives it to binance
