@@ -9,15 +9,24 @@ def trade_data_collation(filename, symbol):
     :param filename: the pathname of the csv files
     :param symbol: associated symbol of trade data
     """
-
+    # Read CSV file
     df = pandas.read_csv(filename, compression='zip', header=None, sep=',', quotechar='"',
                          names=["tradeID", "price", "qty", "quoteQty", "time", "isBuyerMaker", "isBestMatch"])
-    df["time"] = df["time"].floordiv(10000)
-    mean_price = pandas.DataFrame(df.groupby(df["time"], as_index=False).price.mean())
-    total_quantity = pandas.DataFrame(df.groupby(df["time"], as_index=False).qty.sum())
-    merged_df = mean_price.join(total_quantity.set_index("time"), on="time", how="inner")
-    merged_df["symbol"] = symbol
-    return merged_df
+    # Floors time to 10 seconds and then converts back to milliseconds
+    df["time"] = df["time"].floordiv(10000) * 10000
+    # Grouping data and suming and averaging necessary columns
+    df = df.groupby("time", as_index=False).agg({'price': 'mean', 'qty': 'sum', 'quoteQty': 'sum'})
+    # Add symbol column
+    df["symbol"] = symbol
+    # Return DataFrame
+    return df
+
+    # Lilburne's old implementation for safety (it's broken)
+    # mean_price = pandas.DataFrame(df.groupby(df["time"], as_index=False).price.mean())
+    # price=('price', 'mean'), qty=('qty', 'sum'), quoteQty=('quoteQty', 'sum'))
+    # total_quantity = pandas.DataFrame(df.groupby(df["time"], as_index=False).qty.sum())
+    # merged_df = mean_price.join(total_quantity.set_index("time"), on="time", how="inner")
+    # merged_df["symbol"] = symbol
 
 
 def split_symbol(symbol: str, assets) -> tuple:
