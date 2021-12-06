@@ -1,4 +1,23 @@
 from math import floor
+import pandas
+
+
+def trade_data_collation(filename, symbol):
+    """
+    Collates trade data from csv file into 10 second intervals
+
+    :param filename: the pathname of the csv files
+    :param symbol: associated symbol of trade data
+    """
+
+    df = pandas.read_csv(filename, compression='zip', header=None, sep=',', quotechar='"',
+                         names=["tradeID", "price", "qty", "quoteQty", "time", "isBuyerMaker", "isBestMatch"])
+    df["time"] = df["time"].floordiv(10000)
+    mean_price = pandas.DataFrame(df.groupby(df["time"], as_index=False).price.mean())
+    total_quantity = pandas.DataFrame(df.groupby(df["time"], as_index=False).qty.sum())
+    merged_df = mean_price.join(total_quantity.set_index("time"), on="time", how="inner")
+    merged_df["symbol"] = symbol
+    return merged_df
 
 
 def split_symbol(symbol: str, assets) -> tuple:
