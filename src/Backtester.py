@@ -17,12 +17,14 @@ class Backtester:
 
     # ----------------------------------- Initializing -----------------------------------
 
-    def __init__(self, start_date: str, end_date: str, symbols_required: list):
+    def __init__(self, start_date: str, end_date: str, symbols_required: list, debug=dict()):
         """
         Initializes the brokers and the Logger
 
         :param start_date: Beginning date of the backtest (format: DD-MM-YYY)
         :param end_date: Ending date of the backtest (format: DD-MM-YYY)
+        :param symbols_required: The symbols required for the backtest
+        :param debug: A dictionary used to enable certain debug features
         """
         # Saving required symbols
         self.symbols_required = symbols_required
@@ -43,6 +45,9 @@ class Backtester:
 
         # Variable to hold the current time
         self.time = 0
+
+        # Debug variable
+        self.debug = debug
 
     # ----------------------------------- Getter Methods -----------------------------------
 
@@ -88,7 +93,15 @@ class Backtester:
         """
         trade_data = pd.DataFrame()
         for filename in filenames.keys():
-            part_data = trade_data_collation(filenames[filename], filename)
+            # Importing data with debug features
+            if 'limit_trade_imports' in self.debug and self.debug['limit_trade_imports'] is True:
+                if 'limit_trade_imports_nrows' in self.debug:
+                    part_data = trade_data_collation(filenames[filename], filename, debug=True,
+                                                     nrows=self.debug['limit_trade_imports_nrows'])
+                else:
+                    part_data = trade_data_collation(filenames[filename], filename, debug=True)
+            else:
+                part_data = trade_data_collation(filenames[filename], filename)
             trade_data = trade_data.append(part_data, ignore_index=True)
         return trade_data.sort_values(by="time")
 

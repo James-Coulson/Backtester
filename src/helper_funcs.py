@@ -2,16 +2,23 @@ from math import floor
 import pandas
 
 
-def trade_data_collation(filename, symbol):
+def trade_data_collation(filename, symbol, limit_rows=False, nrows=50000):
     """
     Collates trade data from csv file into 10 second intervals
 
+    :param nrows: The maximum number of rows imported (defaults to 50000)
+    :param limit_rows: If set to true the number of rows imported is limited
     :param filename: the pathname of the csv files
     :param symbol: associated symbol of trade data
     """
     # Read CSV file
-    df = pandas.read_csv(filename, compression='zip', header=None, sep=',', quotechar='"',
-                         names=["tradeID", "price", "qty", "quoteQty", "time", "isBuyerMaker", "isBestMatch"])
+    if limit_rows:
+        df = pandas.read_csv(filename, compression='zip', header=None, sep=',', quotechar='"',
+                         names=["tradeID", "price", "qty", "quoteQty", "time", "isBuyerMaker", "isBestMatch"],
+                             nrows=nrows)
+    else:
+        df = pandas.read_csv(filename, compression='zip', header=None, sep=',', quotechar='"',
+                             names=["tradeID", "price", "qty", "quoteQty", "time", "isBuyerMaker", "isBestMatch"])
     # Floors time to 10 seconds and then converts back to milliseconds
     df["time"] = df["time"].floordiv(10000) * 10000
     # Grouping data and suming and averaging necessary columns
