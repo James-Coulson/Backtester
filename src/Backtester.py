@@ -17,7 +17,7 @@ class Backtester:
 
     # ----------------------------------- Initializing -----------------------------------
 
-    def __init__(self, start_date: str, end_date: str, symbols_required: list, debug=dict()):
+    def __init__(self, start_date: str, end_date: str, symbols_required: list, debug):
         """
         Initializes the brokers and the Logger
 
@@ -26,6 +26,9 @@ class Backtester:
         :param symbols_required: The symbols required for the backtest
         :param debug: A dictionary used to enable certain debug features
         """
+        # Debug variable
+        self.debug = debug
+
         # Saving required symbols
         self.symbols_required = symbols_required
 
@@ -35,6 +38,9 @@ class Backtester:
         # Creating brokers and adding to dictionary
         self.brokers['binance'] = BinanceBroker()
 
+        # Variable to hold the current time
+        self.time = 0
+
         # Get data for backtest
         kline_filepaths = {'BTCUSDT': './test_data/binance/spot/monthly/klines/BTCUSDT/15m/BTCUSDT-15m-2021-10.zip'}
         self.kline_data = self.get_binance_data(kline_filepaths)
@@ -43,11 +49,6 @@ class Backtester:
         trade_filepaths = {'BTCUSDT': './test_data/binance/spot/monthly/trades/BTCUSDT/BTCUSDT-trades-2021-10.zip'}
         self.binance_trade_data = self.get_trade_data(trade_filepaths)
 
-        # Variable to hold the current time
-        self.time = 0
-
-        # Debug variable
-        self.debug = debug
 
     # ----------------------------------- Getter Methods -----------------------------------
 
@@ -96,10 +97,12 @@ class Backtester:
             # Importing data with debug features
             if 'limit_trade_imports' in self.debug and self.debug['limit_trade_imports'] is True:
                 if 'limit_trade_imports_nrows' in self.debug:
-                    part_data = trade_data_collation(filenames[filename], filename, debug=True,
+                    part_data = trade_data_collation(filenames[filename], filename,
+                                                     limit_rows=self.debug['limit_trade_imports'],
                                                      nrows=self.debug['limit_trade_imports_nrows'])
                 else:
-                    part_data = trade_data_collation(filenames[filename], filename, debug=True)
+                    part_data = trade_data_collation(filenames[filename], filename,
+                                                     limit_rows=self.debug['limit_trade_imports'])
             else:
                 part_data = trade_data_collation(filenames[filename], filename)
             trade_data = trade_data.append(part_data, ignore_index=True)

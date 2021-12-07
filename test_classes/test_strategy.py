@@ -26,7 +26,13 @@ class TestStrategy():
         :param data: kline
         """
         self.sent += 1
-        self.binance.create_order(price=43600, _type=Enums.TYPE_LMT, side=Enums.SIDE_BID, callback=self.executed, symbol="BTCUSDT", quantity=0.00001)
+        self.binance.create_order(price=43600, type_=Enums.TYPE_LMT, side=Enums.SIDE_ASK, callback=self.executed, symbol="BTCUSDT", quantity=0.00001)
+
+        print("Priniting posiitons")
+        print(self.binance.get_commissions())
+        print("Ending positions")
+
+        self.binance.stop_kline_socket(symbol="BTCUSDT")
 
     def executed(self, data):
         """
@@ -40,6 +46,7 @@ class TestStrategy():
 
 
 if __name__ == '__main__':
-    backtester = Backtester(start_date='2', end_date='2', symbols_required=['BTCUSDT'])
+    debug = {'limit_trade_imports': True}
+    backtester = Backtester(start_date='2', end_date='2', symbols_required=['BTCUSDT'], debug=debug)
     strategy = TestStrategy(binance=backtester.get_brokers()['binance'].get_client())
     backtester.run_backtest()

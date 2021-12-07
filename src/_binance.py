@@ -24,7 +24,7 @@ class Enums:
     TYPE_MKT = 2                                        # Order is a market order
     TYPE_LMT = 3                                        # Order is a limit order
 
-# ----------------------------------- Order Data Structure
+# ----------------------------------- Order Data Structure -----------------------------------
 
 
 class Order:
@@ -34,7 +34,7 @@ class Order:
 
     # ----------------------------------- Initializing -----------------------------------
 
-    def __init__(self, callback: Callable, orderID: int, clientID: int, _type, side, symbol: str, quantity,
+    def __init__(self, callback: Callable, orderID: int, clientID: int, type_, side, symbol: str, quantity,
                  price=None):
         """
         Initialize the Order object
@@ -45,15 +45,15 @@ class Order:
         self.symbol = symbol                            # Symbol of order
         self.quantity = quantity                        # Quantity of order
         self.callback = callback                        # Callback for the order
-        self._type = _type                              # Type of the order
+        self.type_ = type_                              # Type of the order
 
-        if _type is Enums.TYPE_MKT:                     # <- Order is a market order
+        if type_ is Enums.TYPE_MKT:                     # <- Order is a market order
 
             self.locked_price = None                    # Price used for locked order
-        elif _type == Enums.TYPE_LMT:                   # <- Order is a limit order
+        elif type_ == Enums.TYPE_LMT:                   # <- Order is a limit order
             self.lmt_price = price                      # Limit price of order
         else:
-            raise ValueError("Tried to make order with invalid order type: type={}".format(_type))
+            raise ValueError("Tried to make order with invalid order type: type={}".format(type_))
 
     # ----------------------------------- Calculation Methods -----------------------------------
 
@@ -64,9 +64,9 @@ class Order:
         :param price: If order is a market order then a price needs to be specified, other
         :return: Value of order
         """
-        if self._type == Enums.TYPE_MKT:                # Order is a market order
+        if self.type_ == Enums.TYPE_MKT:                # Order is a market order
             return self.quantity * price
-        elif self._type == Enums.TYPE_LMT:              # Order is a limit order
+        elif self.type_ == Enums.TYPE_LMT:              # Order is a limit order
             return self.quantity * self.lmt_price
 
     def set_price(self, price):
@@ -157,22 +157,22 @@ class BinanceClient:
 
     # ----------------------------------- Order Methods -----------------------------------
 
-    def create_order(self, _type, quantity, symbol: str, side, callback: Callable, price=None):
+    def create_order(self, type_, quantity, symbol: str, side, callback: Callable, price=None):
         """
         Uses callbacks to send order to binance
 
         :param callback: The callback function to be used to notify of execution
-        :param _type: The type of the order (MKT, LMT, ...)
+        :param type_: The type of the order (MKT, LMT, ...)
         :param quantity: The quantity wanting to purchase/sell
         :param symbol: Symbol to be traded
         :param side: The side of the order (BID/ASK)
         :param price: If LMT order define the limit price
         :return: The orderID of the trade
         """
-        if _type == Enums.TYPE_MKT:
+        if type_ == Enums.TYPE_MKT:
             # Send market order
             self.create_mkt_order(clientID=self.ID, symbol=symbol, quantity=quantity, side=side, callback=callback)
-        elif _type == Enums.TYPE_LMT:
+        elif type_ == Enums.TYPE_LMT:
             # Check price is specified
             if price is None:
                 raise ValueError("Tried to send a limit order but did not specify limit price")
@@ -182,7 +182,7 @@ class BinanceClient:
                                          callback=callback, lmt_price=price)
         else:
             # Raise ValueError if type cannot be found
-            raise ValueError("Tried to send order but order type was not recognised: type={}".format(_type))
+            raise ValueError("Tried to send order but order type was not recognised: type={}".format(type_))
 
     def close_order(self, orderID: int):
         """
@@ -428,17 +428,18 @@ class BinanceBroker:
         :param clientID: Client whose stopping stream
         :param symbol: Symbol to be stopped being streamed
         """
-        # Remove streaming symbol
+        # Checking symbol is being streamed
         if symbol not in self.kline_streaming_symbols:
-            sockets = self.kline_streaming_symbols[symbol]
-
-            # Iterate through streaming list to find stream
-            for i in range(len(sockets)):
-                if sockets[i][0] == clientID:
-                    sockets.pop(i)
-                    break
-        else:
             raise ValueError("Tried to close socket of symbol that isn't being streamed")
+
+        # Get sockets for given symbol
+        sockets = self.kline_streaming_symbols[symbol]
+
+        # Iterate through streaming list to find stream
+        for i in range(len(sockets)):
+            if sockets[i][0] == clientID:
+                sockets.pop(i)
+                break
 
     def send_mkt_data(self, symbol: str):
         """
@@ -446,14 +447,13 @@ class BinanceBroker:
 
         :param symbol: Symbol whose market data has been updated
         """
-        # ** Streaming klines
         # Check if symbol is in kline_streaming_symbols
-        if symbol in self.kline_streaming_symbols:
-            # Get streams
-            streams = self.kline_streaming_symbols[symbol]
-        else:
+        if symbol not in self.kline_streaming_symbols:
             # Return as nothing is streaming the symbol
             return
+
+        # Get streams
+        streams = self.kline_streaming_symbols[symbol]
 
         # Get kline data dictionary
         mkt_data = self.klines[symbol]
@@ -518,7 +518,7 @@ class BinanceBroker:
         :return: The orderID of the order created
         """
         # Create order object and increment orderID counter
-        order = Order(orderID=self.orderID, clientID=clientID, _type=Enums.TYPE_MKT, side=side, symbol=symbol,
+        order = Order(orderID=self.orderID, clientID=clientID, type_=Enums.TYPE_MKT, side=side, symbol=symbol,
                       quantity=quantity, callback=callback)
         self.orderID += 1
 
@@ -558,7 +558,7 @@ class BinanceBroker:
         :return: The orderID of the order created
         """
         # Create order object and increment orderID counter
-        order = Order(orderID=self.orderID, clientID=clientID, _type=Enums.TYPE_LMT, side=side, symbol=symbol,
+        order = Order(orderID=self.orderID, clientID=clientID, type_=Enums.TYPE_LMT, side=side, symbol=symbol,
                       quantity=quantity, price=lmt_price, callback=callback)
         self.orderID += 1
 
@@ -626,14 +626,14 @@ class BinanceBroker:
 
         :param order: Order to be removed
         """
-        if order._type == Enums.TYPE_MKT:
+        if order.type_ == Enums.TYPE_MKT:
             # Order is a market order
             for i in range(len(self.mkt_orders)):
                 # If order is found remove it and return
                 if self.mkt_orders[i].orderID == order.orderID:
                     self.mkt_orders.pop(i)
                     return
-        elif order._type == Enums.TYPE_LMT:
+        elif order.type_ == Enums.TYPE_LMT:
             # Order is a limit order
             if order.side == Enums.SIDE_BID:
                 # Iterate through bids to find order
@@ -681,7 +681,7 @@ class BinanceBroker:
         # Change account balances
         if order.side == Enums.SIDE_BID:
             # Decrease locked amount by order value
-            if order._type == Enums.TYPE_MKT:
+            if order.type_ == Enums.TYPE_MKT:
                 self.change_locked_asset_balance(clientID=order.clientID, asset=assets[0],
                                                  change=-order.get_value(price=order.locked_price))
             else:
@@ -737,10 +737,10 @@ class BinanceBroker:
             rate = self.COMMISSIONS['taker']
 
         # Get order value
-        if order._type == Enums.TYPE_MKT:
+        if order.type_ == Enums.TYPE_MKT:
             # Get value of order
             value = order.get_value(price=price)
-        elif order._type == Enums.TYPE_LMT:
+        elif order.type_ == Enums.TYPE_LMT:
             # Get value of order
             value = order.quantity * price
         else:
@@ -790,9 +790,6 @@ class BinanceBroker:
         valid_bids = None
         if symbol in self.bids:
             valid_bids = get_keys_above(self.bids[symbol], price)
-
-        print(valid_bids)
-        print(self.bids)
 
         # Execute valid bids and asks
         if valid_bids is not None:
