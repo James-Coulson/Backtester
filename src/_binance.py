@@ -711,7 +711,6 @@ class BinanceBroker:
         Used to change the execution price to take into account slippage. Only takes into account slippage
         caused by large order volumes.
          - For now it does not do anything as orderbook data will be needed to determine slippage.
-         .0
 
         :param price: The unadjusted execution price
         :param symbol: The symbol of the order being executed
