@@ -209,7 +209,7 @@ class BinanceBroker:
 
     # ----------------------------------- Initializing -----------------------------------
 
-    def __init__(self):
+    def __init__(self, _get_time: Callable):
         """
         Used to initialize the BinanceBroker.
         """
@@ -247,6 +247,9 @@ class BinanceBroker:
         # Dictionary to store trade data
         self.trades = dict()                                # { ..., 'symbol' : trade_dict, ... }
 
+        # Get time callable
+        self._get_time = _get_time
+
     # ----------------------------------- Obtaining Linked Client method -----------------------------------
 
     def get_client(self) -> BinanceClient:
@@ -273,6 +276,16 @@ class BinanceBroker:
 
         # Return client
         return client
+
+    # ----------------------------------- Exchange Info methods -----------------------------------
+
+    def get_time(self):
+        """
+        When called get the current time from the Backtester
+
+        :return: Time in UNIX time
+        """
+        return self._get_time()
 
     # ----------------------------------- Account Info methods -----------------------------------
 

@@ -36,7 +36,7 @@ class Backtester:
         self.brokers = dict()
 
         # Creating brokers and adding to dictionary
-        self.brokers['binance'] = BinanceBroker()
+        self.brokers['binance'] = BinanceBroker(_get_time=self.get_time)
 
         # Variable to hold the current time
         self.time = 0
@@ -49,7 +49,6 @@ class Backtester:
         trade_filepaths = {'BTCUSDT': './test_data/binance/spot/monthly/trades/BTCUSDT/BTCUSDT-trades-2021-10.zip'}
         self.binance_trade_data = self.get_trade_data(trade_filepaths)
 
-
     # ----------------------------------- Getter Methods -----------------------------------
 
     def get_brokers(self):
@@ -59,6 +58,14 @@ class Backtester:
         :return: Returns a dictionary of the different broker objects
         """
         return self.brokers
+
+    def get_time(self):
+        """
+        When called returns the current time
+
+        :return: The current time in UNIX
+        """
+        return self.time
 
     # ----------------------------------- Getting Market Data -----------------------------------
 
