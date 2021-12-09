@@ -17,20 +17,20 @@ class Backtester:
 
     # ----------------------------------- Initializing -----------------------------------
 
-    def __init__(self, start_date: str, end_date: str, symbols_required: list, debug):
+    def __init__(self, start_date: str, end_date: str, symbol_data_required: dict, debug):
         """
         Initializes the brokers and the Logger
 
         :param start_date: Beginning date of the backtest (format: DD-MM-YYY)
         :param end_date: Ending date of the backtest (format: DD-MM-YYY)
-        :param symbols_required: The symbols required for the backtest
+        :param symbol_data_required: The symbols required for the backtest
         :param debug: A dictionary used to enable certain debug features
         """
         # Debug variable
         self.debug = debug
 
         # Saving required symbols
-        self.symbols_required = symbols_required
+        self.symbol_data_required = symbol_data_required
 
         # Creating Brokers dictionary
         self.brokers = dict()
