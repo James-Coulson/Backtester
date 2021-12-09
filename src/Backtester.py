@@ -1,10 +1,11 @@
 # Standard libraries
-from zipfile import ZipFile
 import pandas as pd
 
 # Importing user-made libraries
-from _binance import BinanceBroker
-from helper_funcs import trade_data_collation
+from src._binance import BinanceBroker
+from src.helper_funcs import trade_data_collation
+from src.Logger import Logger
+
 
 class Backtester:
     """
@@ -16,13 +17,18 @@ class Backtester:
 
     # ----------------------------------- Initializing -----------------------------------
 
-    def __init__(self, start_date: str, end_date: str, symbols_required: list):
+    def __init__(self, start_date: str, end_date: str, symbols_required: list, debug):
         """
         Initializes the brokers and the Logger
 
         :param start_date: Beginning date of the backtest (format: DD-MM-YYY)
         :param end_date: Ending date of the backtest (format: DD-MM-YYY)
+        :param symbols_required: The symbols required for the backtest
+        :param debug: A dictionary used to enable certain debug features
         """
+        # Debug variable
+        self.debug = debug
+
         # Saving required symbols
         self.symbols_required = symbols_required
 
@@ -30,16 +36,21 @@ class Backtester:
         self.brokers = dict()
 
         # Creating brokers and adding to dictionary
-        self.brokers['binance'] = BinanceBroker()
-
-        # Get data for backtest
-        self.data = self.get_binance_data()
-
-        # Get trade data
-        self.binance_trade_data = self.get_trade_data(filenames)
+        self.brokers['binance'] = BinanceBroker(_get_time=self.get_time)
 
         # Variable to hold the current time
         self.time = 0
+
+        # Get data for backtest
+        kline_filepaths = {'BTCUSDT': './test_data/binance/spot/monthly/klines/BTCUSDT/15m/BTCUSDT-15m-2021-10.zip'}
+        self.kline_data = self.get_binance_data(kline_filepaths)
+
+        # Get trade data
+        trade_filepaths = {'BTCUSDT': './test_data/binance/spot/monthly/trades/BTCUSDT/BTCUSDT-trades-2021-10.zip'}
+        self.binance_trade_data = self.get_trade_data(trade_filepaths)
+
+        # Adding logger to backtester
+        self.logger = Logger()
 
     # ----------------------------------- Getter Methods -----------------------------------
 
@@ -51,14 +62,22 @@ class Backtester:
         """
         return self.brokers
 
+    def get_time(self):
+        """
+        When called returns the current time
+
+        :return: The current time in UNIX
+        """
+        return self.time
+
     # ----------------------------------- Getting Market Data -----------------------------------
 
-    def get_binance_data(self, kline_data_files):
+    def get_binance_data(self, filepaths):
         """
         Used to get binance market data
          - For now only gets a respecified data set.
 
-        :param kline_data_files: dictionary of symbols as keys and pathname as value
+        :param filepaths: Dictionary of symbols as keys and pathname as value
         :return: Returns a pandas DataFrame of the data
         """
         # Headers for the CSV
@@ -67,10 +86,10 @@ class Backtester:
 
         # Returning DataFrame
         kline_data = pd.DataFrame()
-        for symbol in kline_data_files.keys():
-            part_df = pd.read_csv(kline_data_files[symbol], compression='zip', names=headers)
+        for symbol in filepaths.keys():
+            part_df = pd.read_csv(filepaths[symbol], compression='zip', names=headers)
             part_df["symbol"] = symbol
-            kline_data.append(part_df)
+            kline_data = kline_data.append(part_df)
         return kline_data
 
     # -----------------------------------Getting Trade Data-----------------------------------------
@@ -85,8 +104,18 @@ class Backtester:
         """
         trade_data = pd.DataFrame()
         for filename in filenames.keys():
-            part_data = trade_data_collation(filenames[filename], filename)
-            trade_data.append(part_data)
+            # Importing data with debug features
+            if 'limit_trade_imports' in self.debug and self.debug['limit_trade_imports'] is True:
+                if 'limit_trade_imports_nrows' in self.debug:
+                    part_data = trade_data_collation(filenames[filename], filename,
+                                                     limit_rows=self.debug['limit_trade_imports'],
+                                                     nrows=self.debug['limit_trade_imports_nrows'])
+                else:
+                    part_data = trade_data_collation(filenames[filename], filename,
+                                                     limit_rows=self.debug['limit_trade_imports'])
+            else:
+                part_data = trade_data_collation(filenames[filename], filename)
+            trade_data = trade_data.append(part_data, ignore_index=True)
         return trade_data.sort_values(by="time")
 
     # ----------------------------------- Main backtesting Method -----------------------------------
@@ -99,22 +128,26 @@ class Backtester:
 
         # Iterates through the trade data
         for i in range(len(self.binance_trade_data)):
-            self.time = self.binance_trade_data.iloc(i)["time"]
+            # Set time
+            self.time = self.binance_trade_data.iloc[i]["time"]
 
             # Gets and sends binance trade data to binance broker
             row = self.binance_trade_data.iloc[i]
+
+            # Send trade data to BinanceBroker
             self.send_trade_data_to_binance(row=row)
 
+            # Check orders in binance
+            self.brokers['binance'].check_orders(symbol=row['symbol'])
+
             # When trade data interval overlaps with kline data, send kline data to broker
-            if self.data.iloc(kline_num)["close"] <= self.time:
-                kline_row = self.data.iloc[kline_num]
+            while self.kline_data.iloc[kline_num]["close time"] <= self.time and kline_num < len(self.kline_data):
+                # Get row and increment kline counter
+                kline_row = self.kline_data.iloc[kline_num]
                 kline_num += 1
 
                 # Send data to binance
                 self.send_data_to_binance(row=kline_row)
-
-                # Check orders in binance
-                self.brokers['binance'].check_orders(symbol='BTCUSDT')
 
                 # Send new market data
                 self.brokers['binance'].send_mkt_data(symbol='BTCUSDT')
@@ -141,14 +174,19 @@ class Backtester:
         # Give data to BinanceBroker
         self.brokers['binance'].update_klines(symbol='BTCUSDT', klines=mkt_data)
 
-# ----------------------------------- Sending Trade Data ----------------------------------------
+    # ----------------------------------- Sending Trade Data ----------------------------------------
+
     def send_trade_data_to_binance(self, row):
         """
         Gets input row of trade data and gives it to binance
 
         :param row: row of DataFrame of trade_data
         """
+        # Convert to dictionary
         trade_data = dict()
+        trade_data["symbol"] = row["symbol"]
         trade_data["price"] = row["price"]
         trade_data["qty"] = row["qty"]
+
+        # Send trade data to BinanceBroker
         self.brokers['binance'].update_trade_data(trade_data)
