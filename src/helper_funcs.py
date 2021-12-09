@@ -15,7 +15,7 @@ def trade_data_collation(filename, symbol, limit_rows=False, nrows=50000):
     if limit_rows:
         df = pandas.read_csv(filename, compression='zip', header=None, sep=',', quotechar='"',
                          names=["tradeID", "price", "qty", "quoteQty", "time", "isBuyerMaker", "isBestMatch"],
-                             nrows=nrows)
+                         nrows=nrows)
     else:
         df = pandas.read_csv(filename, compression='zip', header=None, sep=',', quotechar='"',
                              names=["tradeID", "price", "qty", "quoteQty", "time", "isBuyerMaker", "isBestMatch"])

@@ -1,5 +1,4 @@
 # Standard libraries
-from zipfile import ZipFile
 import pandas as pd
 
 # Importing user-made libraries
