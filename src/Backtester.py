@@ -5,6 +5,7 @@ import pandas as pd
 # Importing user-made libraries
 from src._binance import BinanceBroker
 from src.helper_funcs import trade_data_collation
+from src.Logger import Logger
 
 
 class Backtester:
@@ -42,6 +43,9 @@ class Backtester:
         # Get trade data
         trade_filepaths = {'BTCUSDT': './test_data/binance/spot/monthly/trades/BTCUSDT/BTCUSDT-trades-2021-10.zip'}
         self.binance_trade_data = self.get_trade_data(trade_filepaths)
+
+        # Adding logger to backtester
+        self.logger = Logger()
 
         # Variable to hold the current time
         self.time = 0
