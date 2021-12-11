@@ -5,7 +5,6 @@ from enum import Enum
 # User made imports
 from src.helper_funcs import split_symbol, get_keys_below, get_keys_above
 
-
 # ----------------------------------- Enums -----------------------------------
 
 
@@ -473,6 +472,7 @@ class BinanceBroker:
 
         # Use callback to send dict to strategies
         for _tuple in streams:
+            print("asdasdas")
             _tuple[1](mkt_data)
 
     # ----------------------------------- Internal market data methods -----------------------------------
