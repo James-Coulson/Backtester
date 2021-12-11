@@ -1,5 +1,11 @@
 # Standard libraries
 import pandas as pd
+import os
+import shutil
+
+# Importing binance download libraries
+from binance_data_download.download_kline import download_daily_klines
+from binance_data_download.download_trade import download_daily_trades
 
 # Importing user-made libraries
 from src._binance import BinanceBroker
@@ -41,14 +47,17 @@ class Backtester:
         # Variable to hold the current time
         self.time = 0
 
+        # Downloading required data
+        self.download_data(symbol_data_required=symbol_data_required, start_data=start_date, end_date=end_date)
+
         # Get data for backtest
-        kline_filepaths = {'BTCUSDT': './test_data/binance/spot/monthly/klines/BTCUSDT/15m/BTCUSDT-15m-2021-10.zip'}
+        kline_filepaths = {'BTCUSDT': './test_data/binance/data/spot/daily/klines/BTCUSDT/15m/BTCUSDT-15m-2021-11-01.zip'}
         self.kline_data = self.get_binance_data(kline_filepaths)
-
+        print(self.kline_data['close time'])
         # Get trade data
-        trade_filepaths = {'BTCUSDT': './test_data/binance/spot/monthly/trades/BTCUSDT/BTCUSDT-trades-2021-10.zip'}
+        trade_filepaths = {'BTCUSDT': './test_data/binance/data/spot/daily/trades/BTCUSDT/BTCUSDT-trades-2021-11-01.zip'}
         self.binance_trade_data = self.get_trade_data(trade_filepaths)
-
+        print(self.binance_trade_data)
         # Adding logger to backtester
         self.logger = Logger()
 
@@ -190,3 +199,46 @@ class Backtester:
 
         # Send trade data to BinanceBroker
         self.brokers['binance'].update_trade_data(trade_data)
+
+    # ----------------------------------- Downloading Data -----------------------------------
+
+    def download_data(self, symbol_data_required: dict, start_data, end_date) -> list:
+        """
+        Used to download data from Binance
+        """
+        print("\n----------------------------------- Downloading Historical Data -----------------------------------")
+
+        trades_base_path = "{}/test_data/binance".format(os.getcwd())
+        kline_base_path = "{}/test_data/binance/".format(os.getcwd())
+
+        # for symbol in symbol_data_required.keys():
+        # Get all dates between two dates
+        dates = pd.date_range(start=start_data, end=end_date, freq='D').to_pydatetime().tolist()
+        dates = [date.strftime("%Y-%m-%d") for date in dates]
+
+        # Download daily data
+        download_daily_trades(trading_type='spot', symbols=symbol_data_required.keys(), num_symbols=1, dates=dates,
+                              start_date=start_data, end_date=end_date, folder=trades_base_path, checksum=0)
+
+        # Iterate through intervals
+        for symbol, intervals in symbol_data_required.items():
+            # Download interval data
+            download_daily_klines(trading_type='spot', symbols=[symbol], num_symbols=1, intervals=intervals,
+                                  dates=dates, start_date=start_data, end_date=end_date, folder=kline_base_path,
+                                  checksum=0)
+
+        print("\n----------------------------------- Finished Downloading Historical Data ---------"
+              "--------------------------\n")
+
+    # ----------------------------------- Deleting Data -----------------------------------
+
+    def delete_historical_data(self):
+        """
+        Deletes historical data used for the backtest
+        """
+        # Get path to delete
+        path = "{}/test_data/binance".format(os.getcwd())
+
+        # Delete historical data
+        print("Deleting historical data files")
+        shutil.rmtree(path=path)

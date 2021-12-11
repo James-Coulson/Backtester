@@ -1,6 +1,6 @@
 from src._binance import Enums, BinanceClient
 from src.Backtester import Backtester
-
+import os
 
 class TestStrategy():
     """
@@ -25,11 +25,9 @@ class TestStrategy():
         """
         self.binance.create_order(price=43600, type_=Enums.TYPE_LMT, side=Enums.SIDE_ASK, callback=self.executed, symbol="BTCUSDT", quantity=0.00001)
 
-        print("Priniting posiitons")
-        print(self.binance.get_commissions())
-        print("Ending positions")
-
-        self.binance.stop_kline_socket(symbol="BTCUSDT")
+        # print("Priniting posiitons")
+        # print(self.binance.get_asset_balances())
+        # print("Ending positions")
 
     def executed(self, data):
         """
@@ -37,12 +35,13 @@ class TestStrategy():
 
         :param data: exec dict
         """
-        print('Received execution')
-        print(data)
+        # print('Received execution')
+        # print(data)
 
 
 if __name__ == '__main__':
-    debug = {'limit_trade_imports': True}
-    backtester = Backtester(start_date='2', end_date='2', symbols_required=['BTCUSDT'], debug=debug)
+    debug = {'limit_trade_imports': False}
+    backtester = Backtester(start_date='2021-11-01', end_date='2021-11-02', symbol_data_required={'BTCUSDT': ['15m', '1m'], 'ADAAUD': ['15m']}, debug=debug)
     strategy = TestStrategy(binance=backtester.get_brokers()['binance'].get_client())
     backtester.run_backtest()
+    backtester.delete_historical_data()
