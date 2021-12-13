@@ -25,8 +25,10 @@ class TestStrategy():
         """
         self.binance.create_order(price=43600, type_=Enums.TYPE_LMT, side=Enums.SIDE_ASK, callback=self.executed, symbol="BTCUSDT", quantity=0.00001)
 
+        print(data)
+
         # print("Priniting posiitons")
-        print(self.binance.get_asset_balances())
+        # print(self.binance.get_asset_balances())
         # print("Ending positions")
 
     def executed(self, data):
