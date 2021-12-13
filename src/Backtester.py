@@ -159,7 +159,7 @@ class Backtester:
                 self.send_data_to_binance(row=kline_row)
 
                 # Send new market data
-                self.brokers['binance'].send_mkt_data(symbol='BTCUSDT')
+                self.brokers['binance'].send_mkt_data()
 
     # ----------------------------------- Sending market data -----------------------------------
 
@@ -181,7 +181,7 @@ class Backtester:
         mkt_data['number of trades'] = row['number of trades']
 
         # Give data to BinanceBroker
-        self.brokers['binance'].update_klines(symbol='BTCUSDT', klines=mkt_data)
+        self.brokers['binance'].update_klines(symbol='BTCUSDT', kline=mkt_data, interval='15m')
 
     # ----------------------------------- Sending Trade Data ----------------------------------------
 
