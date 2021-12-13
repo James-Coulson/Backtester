@@ -735,6 +735,14 @@ class BinanceBroker:
         # Add commissions
         self.add_commission(clientID=order.clientID, asset=assets[0], commission=commission)
 
+        # Log order execution within logger
+        """try:
+            logger.add_log_data("ORDERS", self.get_time(), execution)
+        except:
+            logger.create_log("ORDERS")
+            logger.add_log_data("ORDERS", self.get_time(), execution)
+        """
+
         # Execute callback function
         order.callback(execution)
 
