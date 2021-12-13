@@ -33,7 +33,7 @@ class Logger:
         if key in self.logged_data:
             self.logged_data[key].append((self._get_time(), data))
         else:
-            raise ValueError("Key ({key}) does not correspond with any existing log".format(key))
+            raise ValueError("Key ({}) does not correspond with any existing log".format(key))
 
     def plot_log(self, key: str):
         """
