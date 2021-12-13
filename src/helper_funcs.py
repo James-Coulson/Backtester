@@ -52,6 +52,7 @@ def trade_data_collation(filename, symbol, limit_rows=False, nrows=50000):
     else:
         df = pd.read_csv(filename, compression='zip', header=None, sep=',', quotechar='"',
                              names=["tradeID", "price", "qty", "quoteQty", "time", "isBuyerMaker", "isBestMatch"])
+    print(len(df))
     # Floors time to 10 seconds and then converts back to milliseconds
     df["time"] = df["time"].floordiv(10000) * 10000
     # Grouping data and suming and averaging necessary columns

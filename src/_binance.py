@@ -1,10 +1,8 @@
 # Standard library imports
 from typing import Callable
-from enum import Enum
 
 # User made imports
 from src.helper_funcs import split_symbol, get_keys_below, get_keys_above
-
 
 # ----------------------------------- Enums -----------------------------------
 
@@ -214,13 +212,13 @@ class BinanceBroker:
         Used to initialize the BinanceBroker.
         """
         # Dictionary to store kline streaming symbols
-        self.kline_streaming_symbols = dict()               # { ..., 'symbols' : [ ..., (ID, callback), ... ], ... }
+        self.kline_streaming_symbols = dict()               # { ..., 'symbols' : { ..., 'interval' : [ ..., (ID, callback), ... ], ... }, ... }
 
         # List to store market orders
         self.mkt_orders = []                                # [ ..., order, ... ]
 
         # Dictionary to store kline data
-        self.klines = dict()                                # { ..., 'symbols' : dict, ... } here dict is the kline dict
+        self.klines = dict()                                # { ..., 'symbols' : { ..., 'interval' : kline, ... }, ... }
 
         # ID counters
         self.orderID = 0
@@ -249,6 +247,9 @@ class BinanceBroker:
 
         # Get time callable
         self._get_time = _get_time
+
+        # Dictionary to store intervals updated
+        self.klines_updated = dict()                        # { ..., symbol : [ ..., interval, ... ], ... }
 
     # ----------------------------------- Obtaining Linked Client method -----------------------------------
 
@@ -428,16 +429,24 @@ class BinanceBroker:
         if symbol not in self.SYMBOLS:
             raise ValueError("Tried to stream symbol that is not available on Binance")
 
+        # Check interval is offered by Binance
+        if interval not in self.INTERVALS:
+            raise ValueError("Tried to stream an interval that is not supported by Binance: interval={}".format(interval))
+
         # Add to streaming symbol
         if symbol not in self.kline_streaming_symbols:
-            self.kline_streaming_symbols[symbol] = [(clientID, callback)]
-        else:
-            self.kline_streaming_symbols[symbol].append((clientID, callback))
+            self.kline_streaming_symbols[symbol] = dict()
 
-    def stop_kline_socket(self, clientID: int, symbol: str):
+        if interval not in self.kline_streaming_symbols[symbol]:
+            self.kline_streaming_symbols[symbol][interval] = list()
+
+        self.kline_streaming_symbols[symbol][interval].append((clientID, callback))
+
+    def stop_kline_socket(self, clientID: int, symbol: str, interval: str):
         """
         Called by BinanceClient to stop a stream of market data
 
+        :param interval: The interval to stop streaming
         :param clientID: Client whose stopping stream
         :param symbol: Symbol to be stopped being streamed
         """
@@ -445,8 +454,12 @@ class BinanceBroker:
         if symbol not in self.kline_streaming_symbols:
             raise ValueError("Tried to close socket of symbol that isn't being streamed")
 
+        # Check interval is offered by Binance
+        if interval not in self.INTERVALS:
+            raise ValueError("Tried to stream an interval that is not supported by Binance: interval={}".format(interval))
+
         # Get sockets for given symbol
-        sockets = self.kline_streaming_symbols[symbol]
+        sockets = self.kline_streaming_symbols[symbol][interval]
 
         # Iterate through streaming list to find stream
         for i in range(len(sockets)):
@@ -454,26 +467,34 @@ class BinanceBroker:
                 sockets.pop(i)
                 break
 
-    def send_mkt_data(self, symbol: str):
+    def send_mkt_data(self):
         """
         Called by Backtester to send market data to sockets
 
         :param symbol: Symbol whose market data has been updated
         """
-        # Check if symbol is in kline_streaming_symbols
-        if symbol not in self.kline_streaming_symbols:
-            # Return as nothing is streaming the symbol
-            return
+        # Iterate through updated symbols
+        for symbol in self.klines_updated:
+            # Iterate through updated intervals
+            for interval in self.klines_updated[symbol]:
+                # Checks if symbol and interval are being streamed
+                if symbol not in self.kline_streaming_symbols:
+                    continue
+                if interval not in self.kline_streaming_symbols[symbol]:
+                    continue
 
-        # Get streams
-        streams = self.kline_streaming_symbols[symbol]
+                # Get sockets
+                sockets = self.kline_streaming_symbols[symbol][interval]
 
-        # Get kline data dictionary
-        mkt_data = self.klines[symbol]
+                # Get kline data dictionary
+                mkt_data = self.klines[symbol][interval]
 
-        # Use callback to send dict to strategies
-        for _tuple in streams:
-            _tuple[1](mkt_data)
+                # Use callback to send dict to strategies
+                for _tuple in sockets:
+                    _tuple[1](mkt_data)
+
+        # Clear self.klines_updated
+        self.klines_updated = dict()
 
     # ----------------------------------- Internal market data methods -----------------------------------
 
@@ -857,11 +878,24 @@ class BinanceBroker:
         """
         self.trades[trades['symbol']] = trades
 
-    def update_klines(self, symbol: str, klines: dict):
+    def update_klines(self, symbol: str, interval: str, kline: dict):
         """
         Called by Backtester to update the market data for a given symbol
 
+        :param interval: The interval being updated
         :param symbol: Symbol whose market data is being updated
         :param klines: Dictionary of updated market data
         """
-        self.klines[symbol] = klines
+        # Check if symbol is in self.klines
+        if symbol not in self.klines:
+            self.klines[symbol] = dict()
+
+        # Store kline
+        self.klines[symbol][interval] = kline
+
+        # Check if symbol is in added dictionary
+        if symbol not in self.klines_updated:
+            self.klines_updated[symbol] = []
+
+        # Add updated kline to updated dictionary
+        self.klines_updated[symbol].append(interval)
