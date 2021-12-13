@@ -1,4 +1,5 @@
 import pandas as pd
+from typing import Callable
 
 
 class Logger:
@@ -6,11 +7,12 @@ class Logger:
     Class used to log information regarding the backtest
     """
 
-    def __init__(self):
+    def __init__(self, _get_time: Callable):
         """
         Initializes the logger information
         """
         self.logged_data = dict()
+        self._get_time = _get_time
 
     def create_log(self, key: str):
         """
@@ -19,7 +21,7 @@ class Logger:
         """
         self.logged_data[key] = []
 
-    def add_log_data(self, key, time, data):
+    def add_log_data(self, key, data):
         """
         Adds to log of data to log of data
         :param key: associated key of data
@@ -27,7 +29,7 @@ class Logger:
         :param data: data to be logged
         """
         if key in self.logged_data:
-            self.logged_data[key].append((time, data))
+            self.logged_data[key].append((self._get_time(), data))
         else:
             raise ValueError("Key ({key}) does not correspond with any existing log".format(key))
 

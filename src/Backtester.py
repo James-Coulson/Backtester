@@ -58,7 +58,7 @@ class Backtester:
         self.binance_trade_data = self.get_trade_data(start_date, end_date, symbol_data_required)
 
         # Adding logger to backtester
-        self.logger = Logger()
+        self.logger = Logger(_get_time=self.get_time)
 
     # ----------------------------------- Getter Methods -----------------------------------
 
