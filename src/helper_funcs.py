@@ -1,6 +1,7 @@
 from math import floor
 import pandas as pd
 from datetime import datetime
+import os
 
 
 def downloaded_filepaths(type, start_date, end_date, symbol_data_required):
@@ -15,12 +16,12 @@ def downloaded_filepaths(type, start_date, end_date, symbol_data_required):
     """
 
     # Getting list of relevant dates
-    start_date = datetime.strptime(start_date, "%d/%m/%Y")
-    end_date = datetime.strptime(end_date, "%d/%m/%Y")
+    start_date = datetime.strptime(start_date, "%Y-%m-%d")
+    end_date = datetime.strptime(end_date, "%Y-%m-%d")
     date_range = pd.date_range(start_date, end_date, freq='d')
 
     # Iterating over required files and adding to dictionary
-    file_format = "./test_data/binance/data/spot/daily/{}/{}/{}/{}-{}-{}.zip"
+    file_format = "{}/test_data/binance/data/spot/daily/{}/{}/{}-{}-{}.zip"
     filepaths = dict()
 
     for symbol in symbol_data_required.keys():
@@ -28,9 +29,9 @@ def downloaded_filepaths(type, start_date, end_date, symbol_data_required):
             for date in date_range:
                 date_format = date.strftime("%Y-%m-%d")
                 if type == "klines":
-                    filepath = file_format.format(type, symbol, interval, symbol, interval, date_format)
+                    filepath = file_format.format(os.getcwd(), type, "{}/{}".format(symbol, interval), symbol, interval, date_format)
                 elif type == "trades":
-                    filepath = file_format.format(type, symbol, interval, symbol, type, date_format)
+                    filepath = file_format.format(os.getcwd(), type, symbol, symbol, type, date_format)
                 filepaths[filepath] = (symbol, interval)
     return filepaths
 
@@ -52,7 +53,7 @@ def trade_data_collation(filename, symbol, limit_rows=False, nrows=50000):
     else:
         df = pd.read_csv(filename, compression='zip', header=None, sep=',', quotechar='"',
                              names=["tradeID", "price", "qty", "quoteQty", "time", "isBuyerMaker", "isBestMatch"])
-    print(len(df))
+
     # Floors time to 10 seconds and then converts back to milliseconds
     df["time"] = df["time"].floordiv(10000) * 10000
     # Grouping data and suming and averaging necessary columns

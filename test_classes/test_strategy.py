@@ -15,7 +15,7 @@ class TestStrategy():
         self.binance = binance
         self.binance.add_account_balance(asset="USDT", amount_added=1000000)
         self.binance.add_account_balance(asset="BTC", amount_added=1000)
-        self.binance.start_kline_socket(symbol="BTCUSDT", callback=self.callback, interval='1m')
+        self.binance.start_kline_socket(symbol="BTCUSDT", callback=self.callback, interval='15m')
 
     def callback(self, data):
         """

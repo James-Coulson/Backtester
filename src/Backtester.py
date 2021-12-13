@@ -101,8 +101,9 @@ class Backtester:
             part_df = pd.read_csv(filepath, compression='zip', names=headers)
             part_df["symbol"] = filepaths[filepath][0]
             part_df["interval"] = filepaths[filepath][1]
-            kline_data.append(part_df)
-        kline_data.sort_values(by="close time")
+            kline_data = kline_data.append(part_df)
+
+        kline_data = kline_data.sort_values(by="close time")
         return kline_data
 
     # -----------------------------------Getting Trade Data-----------------------------------------
@@ -146,17 +147,21 @@ class Backtester:
             # Set time
             self.time = self.binance_trade_data.iloc[trade_num]["time"]
 
-            # Gets and sends binance trade data to binance broker
-            row = self.binance_trade_data.iloc[trade_num]
+            while trade_num < len(self.binance_trade_data) and self.binance_trade_data.iloc[trade_num]["time"] <= self.time:
+                # Gets and sends binance trade data to binance broker
+                row = self.binance_trade_data.iloc[trade_num]
 
-            # Send trade data to BinanceBroker
-            self.send_trade_data_to_binance(row=row)
+                # Send trade data to BinanceBroker
+                self.send_trade_data_to_binance(row=row)
 
-            # Check orders in binance
-            self.brokers['binance'].check_orders(symbol=row['symbol'])
+                # Check orders in binance
+                self.brokers['binance'].check_orders(symbol=row['symbol'])
+
+                # Incrementing trade_num
+                trade_num += 1
 
             # When trade data interval overlaps with kline data, send kline data to broker
-            while self.kline_data.iloc[kline_num]["close time"] <= self.time and kline_num < len(self.kline_data):
+            while kline_num < len(self.kline_data) and self.kline_data.iloc[kline_num]["close time"] <= self.time:
                 # Get row and increment kline counter
                 kline_row = self.kline_data.iloc[kline_num]
                 kline_num += 1
@@ -164,9 +169,8 @@ class Backtester:
                 # Send data to binance
                 self.send_data_to_binance(row=kline_row)
 
-                # Send new market data
-                self.brokers['binance'].send_mkt_data()
-            trade_num += 1
+            # Send new market data
+            self.brokers['binance'].send_mkt_data()
 
     # ----------------------------------- Sending market data -----------------------------------
 
@@ -186,9 +190,11 @@ class Backtester:
         mkt_data['volume'] = row['volume']
         mkt_data['close time'] = row['close time']
         mkt_data['number of trades'] = row['number of trades']
+        mkt_data['interval'] = row['interval']
+        mkt_data['symbol'] = row['symbol']
 
         # Give data to BinanceBroker
-        self.brokers['binance'].update_klines(symbol='BTCUSDT', kline=mkt_data, interval='15m')
+        self.brokers['binance'].update_klines(symbol=row['symbol'], kline=mkt_data, interval=row['interval'])
 
     # ----------------------------------- Sending Trade Data ----------------------------------------
 
