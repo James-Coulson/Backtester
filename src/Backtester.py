@@ -83,9 +83,10 @@ class Backtester:
     def get_binance_data(self, start_date, end_date, symbol_data_required):
         """
         Used to get binance market data
-         - For now only gets a respecified data set.
 
-        :param filepaths: Dictionary of symbols as keys and pathname as value
+        :param start_date: The start date of the data wanting the be obtained
+        :param end_date: The finish date of the data wanting the be obtained
+        :param symbol_data_required: Dictionary of symbols as keys and pathname as value
         :return: Returns a pandas DataFrame of the data
         """
         # Headers for the CSV
