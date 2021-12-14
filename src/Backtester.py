@@ -216,9 +216,13 @@ class Backtester:
 
     # ----------------------------------- Downloading Data -----------------------------------
 
-    def download_data(self, symbol_data_required: dict, start_data, end_date) -> list:
+    def download_data(self, symbol_data_required: dict, start_date, end_date):
         """
-        Used to download data from Binance
+        Used to download data from Binance.
+
+        :param start_date: The start date
+        :param end_date: The end date
+        :param symbol_data_required: Dictionary with symbols as keys and a list of required intervals as values
         """
         print("\n----------------------------------- Downloading Historical Data -----------------------------------")
 
@@ -227,18 +231,18 @@ class Backtester:
 
         # for symbol in symbol_data_required.keys():
         # Get all dates between two dates
-        dates = pd.date_range(start=start_data, end=end_date, freq='D').to_pydatetime().tolist()
+        dates = pd.date_range(start=start_date, end=end_date, freq='D').to_pydatetime().tolist()
         dates = [date.strftime("%Y-%m-%d") for date in dates]
 
         # Download daily data
         download_daily_trades(trading_type='spot', symbols=symbol_data_required.keys(), num_symbols=1, dates=dates,
-                              start_date=start_data, end_date=end_date, folder=trades_base_path, checksum=0)
+                              start_date=start_date, end_date=end_date, folder=trades_base_path, checksum=0)
 
         # Iterate through intervals
         for symbol, intervals in symbol_data_required.items():
             # Download interval data
             download_daily_klines(trading_type='spot', symbols=[symbol], num_symbols=1, intervals=intervals,
-                                  dates=dates, start_date=start_data, end_date=end_date, folder=kline_base_path,
+                                  dates=dates, start_date=start_date, end_date=end_date, folder=kline_base_path,
                                   checksum=0)
 
         print("\n----------------------------------- Finished Downloading Historical Data ---------"
