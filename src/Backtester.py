@@ -52,7 +52,7 @@ class Backtester:
         self.time = 0
 
         # Downloading required data
-        self.download_data(symbol_data_required=symbol_data_required, start_data=start_date, end_date=end_date)
+        self.download_data(symbol_data_required=symbol_data_required, start_date=start_date, end_date=end_date)
 
         # Get data for backtest
         self.kline_data = self.get_binance_data(start_date, end_date, symbol_data_required)

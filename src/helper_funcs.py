@@ -5,7 +5,6 @@ import os
 
 
 def downloaded_filepaths(type, start_date, end_date, symbol_data_required):
-
     """
     Returns dictionary of downloaded data with key of filepath and value of (symbol, interval)
 
