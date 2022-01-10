@@ -39,20 +39,27 @@ class Order:
                  price=None):
         """
         Initialize the Order object
+
+        :param callback: Callback method for when order is executed
+        :param orderID: Client order id
+        :param type_: Type of the order
+        :param side: Side of order (bid/ask)
+        :param symbol: Symbol of order (ie. BTCUSDT)
+        :param quantity: Quantity of order (units)
+        :param price: Limit price of order (only for limit orders)
         """
-        self.orderID = orderID  # Order ID
-        self.clientID = clientID  # Client ID of order
-        self.side = side  # Side of order
-        self.symbol = symbol  # Symbol of order
-        self.quantity = quantity  # Quantity of order
-        self.callback = callback  # Callback for the order
-        self.type_ = type_  # Type of the order
+        self.orderID = orderID          # Order ID
+        self.clientID = clientID        # Client ID of order
+        self.side = side                # Side of order
+        self.symbol = symbol            # Symbol of order
+        self.quantity = quantity        # Quantity of order
+        self.callback = callback        # Callback for the order
+        self.type_ = type_              # Type of the order
 
-        if type_ is Enums.TYPE_MKT:  # <- Order is a market order
-
-            self.locked_price = None  # Price used for locked order
-        elif type_ == Enums.TYPE_LMT:  # <- Order is a limit order
-            self.lmt_price = price  # Limit price of order
+        if type_ is Enums.TYPE_MKT:     # <- Order is a market order
+            self.locked_price = None    # Price used for locked order
+        elif type_ == Enums.TYPE_LMT:   # <- Order is a limit order
+            self.lmt_price = price      # Limit price of order
         else:
             raise ValueError("Tried to make order with invalid order type: type={}".format(type_))
 
@@ -173,7 +180,7 @@ class BinanceClient:
         """
         if type_ == Enums.TYPE_MKT:
             # Send market order
-            self.create_mkt_order(clientID=self.ID, symbol=symbol, quantity=quantity, side=side, callback=callback)
+            return self.create_mkt_order(clientID=self.ID, symbol=symbol, quantity=quantity, side=side, callback=callback)
         elif type_ == Enums.TYPE_LMT:
             # Check price is specified
             if price is None:
@@ -205,11 +212,11 @@ class BinanceBroker:
 
     # ----------------------------------- Exchange Constants -----------------------------------
 
-    ASSETS = ['USDT', 'BTC', 'ADA', 'AUD']  # List of assets that can be traded on Binance
-    SYMBOLS = ['BTCUSDT', 'ADAAUD']  # List of symbols that are available on Binance
+    ASSETS = ['USDT', 'BTC', 'ADA', 'AUD']          # List of assets that can be traded on Binance
+    SYMBOLS = ['BTCUSDT', 'ADAAUD']                 # List of symbols that are available on Binance
     COMMISSIONS = {'maker': 0.001, 'taker': 0.001}  # Dictionary for commissions
     INTERVALS = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '1d', '3d', '1w',
-                 '1M']  # Intervals offered by Binance
+                 '1M']                              # Intervals offered by Binance
 
     # ----------------------------------- Initializing -----------------------------------
 
@@ -219,6 +226,7 @@ class BinanceBroker:
         """
         # Access to the Logger
         self.logger = logger
+
         # Dictionary to store kline streaming symbols
         self.kline_streaming_symbols = dict()  # { ..., 'symbols' : { ..., 'interval' : [ ..., (ID, callback), ... ], ... }, ... }
 
@@ -244,7 +252,7 @@ class BinanceBroker:
             self.asks[symbol] = dict()
             self.bids[symbol] = dict()
 
-        # Dictionary that stores orderIDs and corresponding order objects
+        # Dictionary that stores orderIDs and corresponding order objects (for use when deleting orders)
         self.orders = dict()  # { ..., orderID : order, ... }
 
         # Dictionary to store commissions for each client
@@ -307,7 +315,7 @@ class BinanceBroker:
         """
         # Check if client ID is in commissions
         if clientID not in self.commissions:
-            raise ValueError("Tried to get commissions of clientID that doesn;t exist")
+            raise ValueError("Tried to get commissions of clientID that doesn't exist")
 
         # Return commissions dictionary
         return self.commissions[clientID]
@@ -446,9 +454,11 @@ class BinanceBroker:
         if symbol not in self.kline_streaming_symbols:
             self.kline_streaming_symbols[symbol] = dict()
 
+        # If interval isn't already being streamed add to dictionary
         if interval not in self.kline_streaming_symbols[symbol]:
             self.kline_streaming_symbols[symbol][interval] = list()
 
+        # Add tuple to list
         self.kline_streaming_symbols[symbol][interval].append((clientID, callback))
 
     def stop_kline_socket(self, clientID: int, symbol: str, interval: str):
@@ -511,7 +521,7 @@ class BinanceBroker:
     def get_price(self, symbol: str):
         """
         Internal method to get the price of symbol.
-         - This is assumed it is called after the market data is updated
+
         :param symbol: Symbol of price that is needed
         :return: Price of symbol if market data is available and -1 otherwise
         """
@@ -521,7 +531,8 @@ class BinanceBroker:
 
         # No market data available
         if symbol not in self.trades:
-            return -1
+            raise ValueError("Tried to get price of symbol on binance that hasn't been updated: symbol={}".format(
+                symbol))
 
         # Returns open price
         return self.trades[symbol]['price']
@@ -531,7 +542,7 @@ class BinanceBroker:
         Used to get the quantity traded
 
         :param symbol: The symbol to get the data for
-        :param quote: If the quantity or the quoted quantity is returned
+        :param quote: If the quantity or the quoted quantity is returned (default: False)
         :return: The quantity traded and -1 if no data is available
         """
         # Symbol not on Binance
@@ -540,7 +551,8 @@ class BinanceBroker:
 
         # No market data available
         if symbol not in self.trades:
-            return -1
+            raise ValueError("Tried to get quantity of symbol on binance that hasn't been updated: symbol={}".format(
+                symbol))
 
         # Return quantity
         if quote is False:
@@ -586,15 +598,16 @@ class BinanceBroker:
         # Add order to orderID list
         self.orders[order.orderID] = order
 
+        # Creating logger row
         log_order = dict(orderID=self.orderID, clientID=clientID, type_=Enums.TYPE_MKT, side=side, symbol=symbol,
-                      quantity=quantity)
+                         quantity=quantity)
 
         # Adds order to Logger
         try:
-            self.logger.add_log_data("ORDERS", log_order)
+            self.logger.add_log_data("BINANCE_ORDERS", log_order)
         except ValueError:
-            self.logger.create_log("ORDERS")
-            self.logger.add_log_data("ORDERS", log_order)
+            self.logger.create_log("BINANCE_ORDERS")
+            self.logger.add_log_data("BINANCE_ORDERS", log_order)
 
         # Return orderID or order
         return order.orderID
@@ -653,17 +666,16 @@ class BinanceBroker:
         # Add order to orderID list
         self.orders[order.orderID] = order
 
-        # Log the order information within the Logger
-
-        log_order = dict(orderID=self.orderID, clientID=clientID, type_=Enums.TYPE_MKT, side=side, symbol=symbol,
+        # Create logger row
+        log_order = dict(orderID=self.orderID, clientID=clientID, type_=Enums.TYPE_LMT, side=side, symbol=symbol,
                          quantity=quantity)
 
         # Adds order to Logger
         try:
-            self.logger.add_log_data("ORDERS", log_order)
+            self.logger.add_log_data("BINANCE_ORDERS", log_order)
         except ValueError:
-            self.logger.create_log("ORDERS")
-            self.logger.add_log_data("ORDERS", log_order)
+            self.logger.create_log("BINANCE_ORDERS")
+            self.logger.add_log_data("BINANCE_ORDERS", log_order)
 
         # Return orderID or order
         return order.orderID
@@ -769,22 +781,10 @@ class BinanceBroker:
 
         # Log order execution within logger
         try:
-            self.logger.add_log_data("EXORDERS", execution)
+            self.logger.add_log_data("BINANCE_EXORDERS", execution)
         except ValueError:
-            self.logger.create_log("EXORDERS")
-            self.logger.add_log_data("EXORDERS", execution)
-
-        # Log asset balances within logger
-        asset_balance_log = dict()
-        for client in self.asset_balance:
-            for asset in self.asset_balance[client]:
-                asset_balance_log[asset] = self.asset_balance[client][asset][0]
-
-        try:
-            self.logger.add_log_data("ASSETS", asset_balance_log)
-        except ValueError:
-            self.logger.create_log("ASSETS")
-            self.logger.add_log_data("ASSETS", asset_balance_log)
+            self.logger.create_log("BINANCE_EXORDERS")
+            self.logger.add_log_data("BINANCE_EXORDERS", execution)
 
         # Execute callback function
         order.callback(execution)
@@ -907,6 +907,19 @@ class BinanceBroker:
 
             # Execute order
             self.exec_order(order=order, price=price, commission=comm)
+
+        # Create logger row
+        asset_balance_log = dict()
+        for client in self.asset_balances:
+            for asset in self.asset_balances[client]:
+                asset_balance_log[asset] = self.asset_balances[client][asset][0]
+
+        # Log asset balances
+        try:
+            self.logger.add_log_data("ASSETS", asset_balance_log)
+        except ValueError:
+            self.logger.create_log("ASSETS")
+            self.logger.add_log_data("ASSETS", asset_balance_log)
 
         # Clear market orders
         self.mkt_orders = []

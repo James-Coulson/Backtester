@@ -9,7 +9,7 @@ from binance_data_download.download_trade import download_daily_trades
 
 # Importing user-made libraries
 from src._binance import BinanceBroker
-from src.helper_funcs import trade_data_collation
+from src.helper_funcs import binance_trade_data_collation
 from src.Logger import Logger
 from src.helper_funcs import downloaded_filepaths
 
@@ -17,15 +17,11 @@ from src.helper_funcs import downloaded_filepaths
 class Backtester:
     """
     Class used to conduct a backtest
-
-     - For now will only get the 15 min klines. Once binance implementation handles other methods that functionality can
-       be added.
-       ss
     """
 
     # ----------------------------------- Initializing -----------------------------------
 
-    def __init__(self, start_date: str, end_date: str, symbol_data_required: dict, debug):
+    def __init__(self, start_date: str, end_date: str, symbol_data_required: dict, debug: dict):
         """
         Initializes the brokers and the Logger
 
@@ -53,13 +49,13 @@ class Backtester:
         self.time = 0
 
         # Downloading required data
-        self.download_data(symbol_data_required=symbol_data_required, start_date=start_date, end_date=end_date)
+        self.download_binance_data(symbol_data_required=symbol_data_required, start_date=start_date, end_date=end_date)
 
         # Get data for backtest
-        self.kline_data = self.get_binance_data(start_date, end_date, symbol_data_required)
+        self.kline_data = self.get_binance_kline_data(start_date, end_date, symbol_data_required)
 
         # Get trade data
-        self.binance_trade_data = self.get_trade_data(start_date, end_date, symbol_data_required)
+        self.binance_trade_data = self.get_binance_trade_data(start_date, end_date, symbol_data_required)
 
     # ----------------------------------- Getter Methods -----------------------------------
 
@@ -79,16 +75,24 @@ class Backtester:
         """
         return self.time
 
+    def get_logger(self):
+        """
+        Returns the Logger
+
+        :return: The Logger class
+        """
+        return self.logger
+
     # ----------------------------------- Getting Market Data -----------------------------------
 
-    def get_binance_data(self, start_date, end_date, symbol_data_required):
+    def get_binance_kline_data(self, start_date, end_date, symbol_data_required):
         """
         Used to get binance market data
 
         :param start_date: The start date of the data wanting the be obtained
         :param end_date: The finish date of the data wanting the be obtained
         :param symbol_data_required: Dictionary of symbols as keys and pathname as value
-        :return: Returns a pandas DataFrame of the data
+        :return: Returns a pandas DataFrame of the kline data
         """
         # Headers for the CSV
         headers = ['open time', 'open', 'high', 'low', 'close', 'volume', 'close time', 'quote asset volume',
@@ -100,46 +104,59 @@ class Backtester:
         # Iterating over downloaded files
         filepaths = downloaded_filepaths("klines", start_date, end_date, symbol_data_required)
         for filepath in filepaths.keys():
-            part_df = pd.read_csv(filepath, compression='zip', names=headers)
-            part_df["symbol"] = filepaths[filepath][0]
-            part_df["interval"] = filepaths[filepath][1]
-            kline_data = kline_data.append(part_df)
+            part_df = pd.read_csv(filepath, compression='zip', names=headers)   # read csv
+            part_df["symbol"] = filepaths[filepath][0]                          # Add symbol column
+            part_df["interval"] = filepaths[filepath][1]                        # Add interval column
+            kline_data = kline_data.append(part_df)                             # Append to master DataFrame
 
+        # Ordering data by time and returning data
         kline_data = kline_data.sort_values(by="close time")
         return kline_data
 
     # -----------------------------------Getting Trade Data-----------------------------------------
 
-    def get_trade_data(self, start_date, end_date, symbol_data_required):
+    def get_binance_trade_data(self, start_date, end_date, symbol_data_required):
         """
         Used to get trade data and collate it into 10 second intervals
-        - For now only uses established filenames
 
-        :param filenames: dictionary of ticker symbol as key and pathname as value
-        :return: Returns a pandas DataFrame of the data
+        :param start_date: The start date of the data wanting the be obtained
+        :param end_date: The finish date of the data wanting the be obtained
+        :param symbol_data_required: Dictionary of symbols as keys and pathname as value
+        :return: Returns a pandas DataFrame of the trade data
         """
+        # Initialize DataFrame
         trade_data = pd.DataFrame()
+
+        # Get filepaths
         filepaths = downloaded_filepaths("trades", start_date, end_date, symbol_data_required)
+
+        # Iterate over filepaths
         for filepath in filepaths.keys():
             # Importing data with debug features
             if 'limit_trade_imports' in self.debug and self.debug['limit_trade_imports'] is True:
                 if 'limit_trade_imports_nrows' in self.debug:
-                    part_data = trade_data_collation(filepath, filepaths[filepath][0],
-                                                     limit_rows=self.debug['limit_trade_imports'],
-                                                     nrows=self.debug['limit_trade_imports_nrows'])
+                    part_data = binance_trade_data_collation(filepath, filepaths[filepath][0],
+                                                             limit_rows=self.debug['limit_trade_imports'],
+                                                             nrows=self.debug['limit_trade_imports_nrows'])
                 else:
-                    part_data = trade_data_collation(filepath, filepaths[filepath][0],
-                                                     limit_rows=self.debug['limit_trade_imports'])
+                    part_data = binance_trade_data_collation(filepath, filepaths[filepath][0],
+                                                             limit_rows=self.debug['limit_trade_imports'])
             else:
-                part_data = trade_data_collation(filepath, filepaths[filepath][0])
+                part_data = binance_trade_data_collation(filepath, filepaths[filepath][0])
+
+            # Append data
             trade_data = trade_data.append(part_data, ignore_index=True)
+
+        # Sort and return trade data
         return trade_data.sort_values(by="time")
 
     # ----------------------------------- Main backtesting Method -----------------------------------
 
-    def run_backtest(self):
+    def run_backtest(self) -> dict:
         """
         Called to run the backtest
+
+        :return: Returns dictionary containing DataFrame logs
         """
         kline_num = 0
         trade_num = 0
@@ -169,16 +186,17 @@ class Backtester:
                 kline_num += 1
 
                 # Send data to binance
-                self.send_data_to_binance(row=kline_row)
+                self.send_kline_data_to_binance(row=kline_row)
 
             # Send new market data
             self.brokers['binance'].send_mkt_data()
 
-            return self.logger.give_log()
+        # Returns log dictionary
+        return self.logger.give_log()
 
     # ----------------------------------- Sending market data -----------------------------------
 
-    def send_data_to_binance(self, row):
+    def send_kline_data_to_binance(self, row):
         """
         Used to send market data to the BinanceBroker
 
@@ -219,7 +237,7 @@ class Backtester:
 
     # ----------------------------------- Downloading Data -----------------------------------
 
-    def download_data(self, symbol_data_required: dict, start_date, end_date):
+    def download_binance_data(self, symbol_data_required: dict, start_date, end_date):
         """
         Used to download data from Binance.
 
@@ -227,7 +245,7 @@ class Backtester:
         :param end_date: The end date
         :param symbol_data_required: Dictionary with symbols as keys and a list of required intervals as values
         """
-        print("\n----------------------------------- Downloading Historical Data -----------------------------------")
+        print("\n----------------------------------- Downloading Historical Data -----------------------------------\n")
 
         trades_base_path = "{}/test_data/binance".format(os.getcwd())
         kline_base_path = "{}/test_data/binance/".format(os.getcwd())

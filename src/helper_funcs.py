@@ -4,14 +4,15 @@ from datetime import datetime
 import os
 
 
-def downloaded_filepaths(type, start_date, end_date, symbol_data_required):
+def downloaded_filepaths(type_, start_date, end_date, symbol_data_required):
     """
-    Returns dictionary of downloaded data with key of filepath and value of (symbol, interval)
+    Returns dictionary of downloaded data with key as filepath and value of (symbol, interval)
 
-    :params type: Either klines or trades, depending on the needed data
+    :params type_: Either klines or trades, depending on the needed data
     :params start_date: The start date of the requested data
     :params end_date: The end date of the requested data
     :symbol_data_required: The symbols required for the backtest
+    :return: Dictionary of downloaded data with key as filepath and value of (symbol, interval)
     """
 
     # Getting list of relevant dates
@@ -21,21 +22,26 @@ def downloaded_filepaths(type, start_date, end_date, symbol_data_required):
 
     # Iterating over required files and adding to dictionary
     file_format = "{}/test_data/binance/data/spot/daily/{}/{}/{}-{}-{}.zip"
+
+    # Initializing filepaths dictioanry
     filepaths = dict()
 
+    # Generating filepaths
     for symbol in symbol_data_required.keys():
         for interval in symbol_data_required[symbol]:
             for date in date_range:
                 date_format = date.strftime("%Y-%m-%d")
-                if type == "klines":
-                    filepath = file_format.format(os.getcwd(), type, "{}/{}".format(symbol, interval), symbol, interval, date_format)
-                elif type == "trades":
-                    filepath = file_format.format(os.getcwd(), type, symbol, symbol, type, date_format)
+                if type_ == "klines":
+                    filepath = file_format.format(os.getcwd(), type_, "{}/{}".format(symbol, interval), symbol, interval, date_format)
+                elif type_ == "trades":
+                    filepath = file_format.format(os.getcwd(), type_, symbol, symbol, type_, date_format)
                 filepaths[filepath] = (symbol, interval)
+
+    # Returns Dictionary
     return filepaths
 
 
-def trade_data_collation(filename, symbol, limit_rows=False, nrows=50000):
+def binance_trade_data_collation(filename, symbol, limit_rows=False, nrows=50000):
     """
     Collates trade data from csv file into 10 second intervals
 
@@ -43,6 +49,7 @@ def trade_data_collation(filename, symbol, limit_rows=False, nrows=50000):
     :param limit_rows: If set to true the number of rows imported is limited
     :param filename: the pathname of the csv files
     :param symbol: associated symbol of trade data
+    :return: Trade data DataFrame
     """
     # Read CSV file
     if limit_rows:
@@ -55,17 +62,20 @@ def trade_data_collation(filename, symbol, limit_rows=False, nrows=50000):
 
     # Floors time to 10 seconds and then converts back to milliseconds
     df["time"] = df["time"].floordiv(10000) * 10000
+
     # Grouping data and suming and averaging necessary columns
     df = df.groupby("time", as_index=False).agg({'price': 'mean', 'qty': 'sum', 'quoteQty': 'sum'})
+
     # Add symbol column
     df["symbol"] = symbol
+
     # Return DataFrame
     return df
 
 
 def split_symbol(symbol: str, assets) -> tuple:
     """
-    Used to split a symbol
+    Used to split a symbol=
 
     :param symbol: Symbol to be split
     :param assets: Possible asset tickers
@@ -95,11 +105,11 @@ def round_decimals_down(number:float, decimals:int=2):
     return floor(number * factor) / factor
 
 
-def get_keys_above(d: dict, min) -> dict:
+def get_keys_above(d: dict, min_) -> dict:
     """
     Used to get keys of a dictionary that are above a given value
     :param d: Dictionary to get items from
-    :param min: Value which keys should be above
+    :param min_: Value which keys should be above
     :return: Dictionary with keys in range
     """
     # Make empty dictionary
@@ -107,18 +117,19 @@ def get_keys_above(d: dict, min) -> dict:
 
     # Iterate through keys to get items
     for key, val in d.items():
-        if int(key) >= min:
+        if int(key) >= min_:
             ret[key] = val
 
     # Return new dictionary
     return ret
 
 
-def get_keys_below(d: dict, max) -> dict:
+def get_keys_below(d: dict, max_) -> dict:
     """
     Used to get keys of a dictionary that are below a given value
+
     :param d: Dictionary to get items from
-    :param max: Value which keys should be above
+    :param max_: Value which keys should be above
     :return: Dictionary with keys in range
     """
     # Make empty dictionary
@@ -126,7 +137,7 @@ def get_keys_below(d: dict, max) -> dict:
 
     # Iterate through keys to get items
     for key, val in d.items():
-        if int(key) <= max:
+        if int(key) <= max_:
             ret[key] = val
 
     # Return new dictionary

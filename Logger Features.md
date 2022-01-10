@@ -1,11 +1,9 @@
-### "ORDERS"
-Dictionary of all orders created, with information stored within the Order object
+### "BINANCE_ORDERS"
+Contains orders received by binance
 
-###"EXORDERS" 
+### "BINANCE_EXORDERS" 
 Dictionary of executed orders, with information stored within the execution dictionary
 
-###"EQUITY"
-
-###"ASSETS"
+### "BINANCE_ASSETS"
 
 

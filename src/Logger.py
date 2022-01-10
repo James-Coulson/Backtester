@@ -11,7 +11,10 @@ class Logger:
         """
         Initializes the logger information
         """
+        # Create logger dictionary
         self.logged_data = dict()
+
+        # Saving get_time callable
         self._get_time = _get_time
 
     def create_log(self, key: str):
@@ -29,15 +32,20 @@ class Logger:
         :param key: associated key of data
         :param data: data to be logged
         """
+        # Add time column
         data["time"] = self._get_time()
-        if key in self.logged_data:
-            self.logged_data[key].append(data)
-        else:
+
+        # Checking if key exists
+        if key not in self.logged_data:
             raise ValueError("Key ({}) does not correspond with any existing log".format(key))
+
+        # Logging data
+        self.logged_data[key].append(data, ignore_index=True)
 
     def give_log(self):
         """
         Passes the log of the data to be analysed
+
         :returns logged_data: dictionary of logged data
         """
         return self.logged_data
