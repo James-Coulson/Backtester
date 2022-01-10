@@ -1,23 +1,66 @@
 from math import floor
-import pandas
+import pandas as pd
+from datetime import datetime
+import os
 
 
-def trade_data_collation(filename, symbol):
+def downloaded_filepaths(type, start_date, end_date, symbol_data_required):
+    """
+    Returns dictionary of downloaded data with key of filepath and value of (symbol, interval)
+
+    :params type: Either klines or trades, depending on the needed data
+    :params start_date: The start date of the requested data
+    :params end_date: The end date of the requested data
+    :symbol_data_required: The symbols required for the backtest
+    """
+
+    # Getting list of relevant dates
+    start_date = datetime.strptime(start_date, "%Y-%m-%d")
+    end_date = datetime.strptime(end_date, "%Y-%m-%d")
+    date_range = pd.date_range(start_date, end_date, freq='d')
+
+    # Iterating over required files and adding to dictionary
+    file_format = "{}/test_data/binance/data/spot/daily/{}/{}/{}-{}-{}.zip"
+    filepaths = dict()
+
+    for symbol in symbol_data_required.keys():
+        for interval in symbol_data_required[symbol]:
+            for date in date_range:
+                date_format = date.strftime("%Y-%m-%d")
+                if type == "klines":
+                    filepath = file_format.format(os.getcwd(), type, "{}/{}".format(symbol, interval), symbol, interval, date_format)
+                elif type == "trades":
+                    filepath = file_format.format(os.getcwd(), type, symbol, symbol, type, date_format)
+                filepaths[filepath] = (symbol, interval)
+    return filepaths
+
+
+def trade_data_collation(filename, symbol, limit_rows=False, nrows=50000):
     """
     Collates trade data from csv file into 10 second intervals
 
+    :param nrows: The maximum number of rows imported (defaults to 50000)
+    :param limit_rows: If set to true the number of rows imported is limited
     :param filename: the pathname of the csv files
     :param symbol: associated symbol of trade data
     """
+    # Read CSV file
+    if limit_rows:
+        df = pd.read_csv(filename, compression='zip', header=None, sep=',', quotechar='"',
+                         names=["tradeID", "price", "qty", "quoteQty", "time", "isBuyerMaker", "isBestMatch"],
+                         nrows=nrows)
+    else:
+        df = pd.read_csv(filename, compression='zip', header=None, sep=',', quotechar='"',
+                             names=["tradeID", "price", "qty", "quoteQty", "time", "isBuyerMaker", "isBestMatch"])
 
-    df = pandas.read_csv(filename, compression='zip', header=None, sep=',', quotechar='"',
-                         names=["tradeID", "price", "qty", "quoteQty", "time", "isBuyerMaker", "isBestMatch"])
-    df["time"] = df["time"].floordiv(10000)
-    mean_price = pandas.DataFrame(df.groupby(df["time"], as_index=False).price.mean())
-    total_quantity = pandas.DataFrame(df.groupby(df["time"], as_index=False).qty.sum())
-    merged_df = mean_price.join(total_quantity.set_index("time"), on="time", how="inner")
-    merged_df["symbol"] = symbol
-    return merged_df
+    # Floors time to 10 seconds and then converts back to milliseconds
+    df["time"] = df["time"].floordiv(10000) * 10000
+    # Grouping data and suming and averaging necessary columns
+    df = df.groupby("time", as_index=False).agg({'price': 'mean', 'qty': 'sum', 'quoteQty': 'sum'})
+    # Add symbol column
+    df["symbol"] = symbol
+    # Return DataFrame
+    return df
 
 
 def split_symbol(symbol: str, assets) -> tuple:
