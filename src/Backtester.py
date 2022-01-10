@@ -20,6 +20,7 @@ class Backtester:
 
      - For now will only get the 15 min klines. Once binance implementation handles other methods that functionality can
        be added.
+       ss
     """
 
     # ----------------------------------- Initializing -----------------------------------
