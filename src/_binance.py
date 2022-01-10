@@ -3,6 +3,8 @@ from typing import Callable
 
 # User made imports
 from src.helper_funcs import split_symbol, get_keys_below, get_keys_above
+from src.Logger import Logger
+
 
 # ----------------------------------- Enums -----------------------------------
 
@@ -14,13 +16,14 @@ class Enums:
 
     # ----------------------------------- Order sides -----------------------------------
 
-    SIDE_BID = 0                                        # Order is a bid
-    SIDE_ASK = 1                                        # Order is an ask
+    SIDE_BID = 0  # Order is a bid
+    SIDE_ASK = 1  # Order is an ask
 
     # ----------------------------------- Order types -----------------------------------
 
-    TYPE_MKT = 2                                        # Order is a market order
-    TYPE_LMT = 3                                        # Order is a limit order
+    TYPE_MKT = 2  # Order is a market order
+    TYPE_LMT = 3  # Order is a limit order
+
 
 # ----------------------------------- Order Data Structure -----------------------------------
 
@@ -37,19 +40,19 @@ class Order:
         """
         Initialize the Order object
         """
-        self.orderID = orderID                          # Order ID
-        self.clientID = clientID                        # Client ID of order
-        self.side = side                                # Side of order
-        self.symbol = symbol                            # Symbol of order
-        self.quantity = quantity                        # Quantity of order
-        self.callback = callback                        # Callback for the order
-        self.type_ = type_                              # Type of the order
+        self.orderID = orderID  # Order ID
+        self.clientID = clientID  # Client ID of order
+        self.side = side  # Side of order
+        self.symbol = symbol  # Symbol of order
+        self.quantity = quantity  # Quantity of order
+        self.callback = callback  # Callback for the order
+        self.type_ = type_  # Type of the order
 
-        if type_ is Enums.TYPE_MKT:                     # <- Order is a market order
+        if type_ is Enums.TYPE_MKT:  # <- Order is a market order
 
-            self.locked_price = None                    # Price used for locked order
-        elif type_ == Enums.TYPE_LMT:                   # <- Order is a limit order
-            self.lmt_price = price                      # Limit price of order
+            self.locked_price = None  # Price used for locked order
+        elif type_ == Enums.TYPE_LMT:  # <- Order is a limit order
+            self.lmt_price = price  # Limit price of order
         else:
             raise ValueError("Tried to make order with invalid order type: type={}".format(type_))
 
@@ -62,9 +65,9 @@ class Order:
         :param price: If order is a market order then a price needs to be specified, other
         :return: Value of order
         """
-        if self.type_ == Enums.TYPE_MKT:                # Order is a market order
+        if self.type_ == Enums.TYPE_MKT:  # Order is a market order
             return self.quantity * price
-        elif self.type_ == Enums.TYPE_LMT:              # Order is a limit order
+        elif self.type_ == Enums.TYPE_LMT:  # Order is a limit order
             return self.quantity * self.lmt_price
 
     def set_price(self, price):
@@ -74,6 +77,7 @@ class Order:
         :param price: Price used for locked amount
         """
         self.locked_price = price
+
 
 # ----------------------------------- Binance Client -----------------------------------
 
@@ -190,6 +194,7 @@ class BinanceClient:
         """
         self.close_order_(orderID=orderID)
 
+
 # ----------------------------------- Binance Broker -----------------------------------
 
 
@@ -200,36 +205,39 @@ class BinanceBroker:
 
     # ----------------------------------- Exchange Constants -----------------------------------
 
-    ASSETS = ['USDT', 'BTC', 'ADA', 'AUD']                            # List of assets that can be traded on Binance
-    SYMBOLS = ['BTCUSDT', 'ADAAUD']                               # List of symbols that are available on Binance
-    COMMISSIONS = {'maker': 0.001, 'taker': 0.001}      # Dictionary for commissions
-    INTERVALS = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '1d', '3d', '1w', '1M']  # Intervals offered by Binance
+    ASSETS = ['USDT', 'BTC', 'ADA', 'AUD']  # List of assets that can be traded on Binance
+    SYMBOLS = ['BTCUSDT', 'ADAAUD']  # List of symbols that are available on Binance
+    COMMISSIONS = {'maker': 0.001, 'taker': 0.001}  # Dictionary for commissions
+    INTERVALS = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '1d', '3d', '1w',
+                 '1M']  # Intervals offered by Binance
 
     # ----------------------------------- Initializing -----------------------------------
 
-    def __init__(self, _get_time: Callable):
+    def __init__(self, _get_time: Callable, logger: Logger):
         """
         Used to initialize the BinanceBroker.
         """
+        # Access to the Logger
+        self.logger = logger
         # Dictionary to store kline streaming symbols
-        self.kline_streaming_symbols = dict()               # { ..., 'symbols' : { ..., 'interval' : [ ..., (ID, callback), ... ], ... }, ... }
+        self.kline_streaming_symbols = dict()  # { ..., 'symbols' : { ..., 'interval' : [ ..., (ID, callback), ... ], ... }, ... }
 
         # List to store market orders
-        self.mkt_orders = []                                # [ ..., order, ... ]
+        self.mkt_orders = []  # [ ..., order, ... ]
 
         # Dictionary to store kline data
-        self.klines = dict()                                # { ..., 'symbols' : { ..., 'interval' : kline, ... }, ... }
+        self.klines = dict()  # { ..., 'symbols' : { ..., 'interval' : kline, ... }, ... }
 
         # ID counters
         self.orderID = 0
         self.clientID = 0
 
         # Dictionary to store asset balances
-        self.asset_balances = dict()                        # { ..., clientID : { ..., 'asset' : (total_amount, locked_amount), ... }, ... }
+        self.asset_balances = dict()  # { ..., clientID : { ..., 'asset' : (total_amount, locked_amount), ... }, ... }
 
         # Dictionaries to hold asks and bids
-        self.asks = dict()                                  # { ..., 'symbol' : { ..., price : [ ..., order, ... ], ... }, ... }
-        self.bids = dict()                                  # { ..., 'symbol' : { ..., price : [ ..., order, ... ], ... }, ... }
+        self.asks = dict()  # { ..., 'symbol' : { ..., price : [ ..., order, ... ], ... }, ... }
+        self.bids = dict()  # { ..., 'symbol' : { ..., price : [ ..., order, ... ], ... }, ... }
 
         # Initializing asks and bids
         for symbol in self.SYMBOLS:
@@ -237,19 +245,19 @@ class BinanceBroker:
             self.bids[symbol] = dict()
 
         # Dictionary that stores orderIDs and corresponding order objects
-        self.orders = dict()                                # { ..., orderID : order, ... }
+        self.orders = dict()  # { ..., orderID : order, ... }
 
         # Dictionary to store commissions for each client
-        self.commissions = dict()                           # { ..., clientID : { ..., 'asset' :  commission, ... }, ... }
+        self.commissions = dict()  # { ..., clientID : { ..., 'asset' :  commission, ... }, ... }
 
         # Dictionary to store trade data
-        self.trades = dict()                                # { ..., 'symbol' : trade_dict, ... }
+        self.trades = dict()  # { ..., 'symbol' : trade_dict, ... }
 
         # Get time callable
         self._get_time = _get_time
 
         # Dictionary to store intervals updated
-        self.klines_updated = dict()                        # { ..., symbol : [ ..., interval, ... ], ... }
+        self.klines_updated = dict()  # { ..., symbol : [ ..., interval, ... ], ... }
 
     # ----------------------------------- Obtaining Linked Client method -----------------------------------
 
@@ -431,7 +439,8 @@ class BinanceBroker:
 
         # Check interval is offered by Binance
         if interval not in self.INTERVALS:
-            raise ValueError("Tried to stream an interval that is not supported by Binance: interval={}".format(interval))
+            raise ValueError(
+                "Tried to stream an interval that is not supported by Binance: interval={}".format(interval))
 
         # Add to streaming symbol
         if symbol not in self.kline_streaming_symbols:
@@ -456,7 +465,8 @@ class BinanceBroker:
 
         # Check interval is offered by Binance
         if interval not in self.INTERVALS:
-            raise ValueError("Tried to stream an interval that is not supported by Binance: interval={}".format(interval))
+            raise ValueError(
+                "Tried to stream an interval that is not supported by Binance: interval={}".format(interval))
 
         # Get sockets for given symbol
         sockets = self.kline_streaming_symbols[symbol][interval]
@@ -576,6 +586,16 @@ class BinanceBroker:
         # Add order to orderID list
         self.orders[order.orderID] = order
 
+        log_order = dict(orderID=self.orderID, clientID=clientID, type_=Enums.TYPE_MKT, side=side, symbol=symbol,
+                      quantity=quantity)
+
+        # Adds order to Logger
+        try:
+            self.logger.add_log_data("ORDERS", log_order)
+        except ValueError:
+            self.logger.create_log("ORDERS")
+            self.logger.add_log_data("ORDERS", log_order)
+
         # Return orderID or order
         return order.orderID
 
@@ -632,6 +652,18 @@ class BinanceBroker:
 
         # Add order to orderID list
         self.orders[order.orderID] = order
+
+        # Log the order information within the Logger
+
+        log_order = dict(orderID=self.orderID, clientID=clientID, type_=Enums.TYPE_MKT, side=side, symbol=symbol,
+                         quantity=quantity)
+
+        # Adds order to Logger
+        try:
+            self.logger.add_log_data("ORDERS", log_order)
+        except ValueError:
+            self.logger.create_log("ORDERS")
+            self.logger.add_log_data("ORDERS", log_order)
 
         # Return orderID or order
         return order.orderID
@@ -736,12 +768,23 @@ class BinanceBroker:
         self.add_commission(clientID=order.clientID, asset=assets[0], commission=commission)
 
         # Log order execution within logger
-        """try:
-            logger.add_log_data("ORDERS", self.get_time(), execution)
-        except:
-            logger.create_log("ORDERS")
-            logger.add_log_data("ORDERS", self.get_time(), execution)
-        """
+        try:
+            self.logger.add_log_data("EXORDERS", execution)
+        except ValueError:
+            self.logger.create_log("EXORDERS")
+            self.logger.add_log_data("EXORDERS", execution)
+
+        # Log asset balances within logger
+        asset_balance_log = dict()
+        for client in self.asset_balance:
+            for asset in self.asset_balance[client]:
+                asset_balance_log[asset] = self.asset_balance[client][asset][0]
+
+        try:
+            self.logger.add_log_data("ASSETS", asset_balance_log)
+        except ValueError:
+            self.logger.create_log("ASSETS")
+            self.logger.add_log_data("ASSETS", asset_balance_log)
 
         # Execute callback function
         order.callback(execution)

@@ -20,25 +20,25 @@ class Logger:
 
         :param key: associated key of data
         """
-        self.logged_data[key] = []
+        self.logged_data[key] = pd.DataFrame()
 
-    def add_log_data(self, key, data):
+    def add_log_data(self, key: str, data):
         """
         Adds to log of data to log of data
 
         :param key: associated key of data
-        :param time: time of associated data
         :param data: data to be logged
         """
+        data["time"] = self._get_time()
         if key in self.logged_data:
-            self.logged_data[key].append((self._get_time(), data))
+            self.logged_data[key].append(data)
         else:
             raise ValueError("Key ({}) does not correspond with any existing log".format(key))
 
-    def plot_log(self, key: str):
+    def give_log(self):
         """
-        Plot the relevant data
+        Passes the log of the data to be analysed
+        :returns logged_data: dictionary of logged data
         """
-        df = pd.DataFrame(self.logged_data[key], columns=["time", key])
-        df.plot()
+        return self.logged_data
 

@@ -46,7 +46,7 @@ class Backtester:
         self.brokers = dict()
 
         # Creating brokers and adding to dictionary
-        self.brokers['binance'] = BinanceBroker(_get_time=self.get_time)
+        self.brokers['binance'] = BinanceBroker(_get_time=self.get_time, logger=self.logger)
 
         # Variable to hold the current time
         self.time = 0
@@ -172,6 +172,8 @@ class Backtester:
 
             # Send new market data
             self.brokers['binance'].send_mkt_data()
+
+            return self.logger.give_log()
 
     # ----------------------------------- Sending market data -----------------------------------
 
