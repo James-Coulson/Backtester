@@ -259,7 +259,7 @@ class BinanceBroker:
         self.commissions = dict()  # { ..., clientID : { ..., 'asset' :  commission, ... }, ... }
 
         # Dictionary to store trade data
-        self.trades = dict()  # { ..., 'symbol' : trade_dict, ... }
+        self.trade_data = dict()  # { ..., 'symbol' : trade_dict, ... }
 
         # Get time callable
         self._get_time = _get_time
@@ -530,12 +530,12 @@ class BinanceBroker:
             raise ValueError("Tried to get price of symbol not on Binance: symbol={}".format(symbol))
 
         # No market data available
-        if symbol not in self.trades:
+        if symbol not in self.trade_data:
             raise ValueError("Tried to get price of symbol on binance that hasn't been updated: symbol={}".format(
                 symbol))
 
         # Returns open price
-        return self.trades[symbol]['price']
+        return self.trade_data[symbol]['price']
 
     def get_quantity(self, symbol: str, quote=False):
         """
@@ -550,15 +550,15 @@ class BinanceBroker:
             raise ValueError("Tried to get quantity of symbol not on Binance: symbol={}".format(symbol))
 
         # No market data available
-        if symbol not in self.trades:
+        if symbol not in self.trade_data:
             raise ValueError("Tried to get quantity of symbol on binance that hasn't been updated: symbol={}".format(
                 symbol))
 
         # Return quantity
         if quote is False:
-            return self.trades[symbol]['quantity']
+            return self.trade_data[symbol]['quantity']
         else:
-            return self.trades[symbol]['quoteQty']
+            return self.trade_data[symbol]['quoteQty']
 
     # ----------------------------------- Order receiving -----------------------------------
 
@@ -926,13 +926,13 @@ class BinanceBroker:
 
     # ----------------------------------- Updating market data -----------------------------------
 
-    def update_trade_data(self, trades: dict):
+    def update_trade_data(self, trade_data: dict):
         """
         Called by Backtester
 
-        :param trades: The trade dictionary
+        :param trade_data: The trade dictionary
         """
-        self.trades[trades['symbol']] = trades
+        self.trade_data[trade_data['symbol']] = trade_data
 
     def update_klines(self, symbol: str, interval: str, kline: dict):
         """
