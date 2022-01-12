@@ -142,3 +142,15 @@ def get_keys_below(d: dict, max_) -> dict:
 
     # Return new dictionary
     return ret
+
+
+def clamp(num, min_value, max_value):
+    """
+    Mathematical clamp function
+
+    :param num: The number
+    :param min_value: Minimum of clamp range
+    :param max_value: Maximum of clamp range
+    :return: Clamped value
+    """
+    return max(min(num, max_value), min_value)

@@ -17,6 +17,7 @@ class TestStrategy():
         self.binance.add_account_balance(asset="USDT", amount_added=1000000)
         self.binance.add_account_balance(asset="BTC", amount_added=1000)
         self.binance.start_kline_socket(symbol="BTCUSDT", callback=self.callback, interval='15m')
+        # self.binance.start_symbol_mark_price_socket(symbol="BTCUSDT", callback=self.callback)
 
     def callback(self, data):
         """
@@ -28,6 +29,7 @@ class TestStrategy():
 
         print(data)
 
+        # self.binance.stop_kline_socket(symbol="BTCUSDT", interval="15m")
         # print("Priniting posiitons")
         # print(self.binance.get_asset_balances())
         # print("Ending positions")

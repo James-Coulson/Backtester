@@ -166,6 +166,7 @@ class Backtester:
             # Set time
             self.time = self.binance_trade_data.iloc[trade_num]["time"]
 
+            # Updates new trade data
             while trade_num < len(self.binance_trade_data) and self.binance_trade_data.iloc[trade_num]["time"] <= self.time:
                 # Gets and sends binance trade data to binance broker
                 row = self.binance_trade_data.iloc[trade_num]
@@ -174,7 +175,7 @@ class Backtester:
                 self.send_trade_data_to_binance(row=row)
 
                 # Check orders in binance
-                self.brokers['binance'].check_orders(symbol=row['symbol'])
+                self.brokers['binance'].check_orders(symbol=row['symbol'], mkt="spot")
 
                 # Incrementing trade_num
                 trade_num += 1
@@ -216,7 +217,7 @@ class Backtester:
         mkt_data['symbol'] = row['symbol']
 
         # Give data to BinanceBroker
-        self.brokers['binance'].update_klines(symbol=row['symbol'], kline=mkt_data, interval=row['interval'])
+        self.brokers['binance'].update_klines(symbol=row['symbol'], kline=mkt_data, interval=row['interval'], mkt="spot")
 
     # ----------------------------------- Sending Trade Data ----------------------------------------
 
@@ -233,7 +234,7 @@ class Backtester:
         trade_data["qty"] = row["qty"]
 
         # Send trade data to BinanceBroker
-        self.brokers['binance'].update_trade_data(trade_data)
+        self.brokers['binance'].update_trade_data(trade_data, mkt="spot")
 
     # ----------------------------------- Downloading Data -----------------------------------
 
