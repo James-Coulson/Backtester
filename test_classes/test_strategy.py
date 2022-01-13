@@ -2,7 +2,6 @@ from src._binance import Enums, BinanceClient
 from src.Backtester import Backtester
 
 
-
 class TestStrategy():
     """
     Test strategy that buys and then sells at the current price
