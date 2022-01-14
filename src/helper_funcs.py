@@ -154,3 +154,18 @@ def clamp(num, min_value, max_value):
     :return: Clamped value
     """
     return max(min(num, max_value), min_value)
+
+
+def sign(num):
+    """
+    Mathematical sign function
+
+    :param num: The number
+    :return: sign(num)
+    """
+    if num > 0:
+        return 1
+    elif num < 0:
+        return -1
+    else:
+        return 0
