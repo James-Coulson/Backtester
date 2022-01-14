@@ -147,8 +147,16 @@ class MarginAccountUSDM:
         :return: The maximum removable amount
         """
         min_comp = min(self.wallet - self.get_maintenance_margin(), self.wallet + self.size *
-                       (self.mark_price - self.entry_price) - self.mark_price * abs(self.size) * self.leverage)
+                       (self.mark_price - self.entry_price) - self.mark_price * abs(self.size) * (1 / self.leverage))
         return max(min_comp, 0)
+
+    def get_margin_balance(self):
+        """
+        Calculates and returns the margin balance
+
+        :return: The margin balance
+        """
+        return self.wallet + self.get_pnl()
 
     # Setters
 
@@ -172,6 +180,29 @@ class MarginAccountUSDM:
 
         self.leverage = leverage
         return True
+
+    # Wallet Interactions
+
+    def add_to_wallet(self, amount):
+        """
+        Adds the specified amount of USDM to the wallet
+
+        :param amount: The amount to be added
+        """
+        self.wallet += amount
+
+    def remove_from_wallet(self, amount):
+        """
+        Attempts to remove the specified amount from the wallet
+
+        :param amount: Amount to be removed
+        """
+        # Check if it is possible to remove specified amount
+        if amount > self.get_max_removable():
+            raise ValueError("Tried to remove more than allowable from USD-M {} wallet".format(self.symbol))
+
+        # Remove amount
+        self.wallet -= amount
 
 # ----------------------------------- Binance Client -----------------------------------
 
