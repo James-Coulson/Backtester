@@ -35,7 +35,7 @@ class Order:
 
     # ----------------------------------- Initializing -----------------------------------
 
-    def __init__(self, callback: Callable, orderID: int, clientID: int, type_, side, symbol: str, quantity,
+    def __init__(self, callback: Callable, orderID: int, clientID: int, type_, side, symbol: str, quantity, market,
                  price=None):
         """
         Initialize the Order object
@@ -47,6 +47,7 @@ class Order:
         :param symbol: Symbol of order (ie. BTCUSDT)
         :param quantity: Quantity of order (units)
         :param price: Limit price of order (only for limit orders)
+        :param market: The market of the order ('SPOT' or 'MARGIN')
         """
         self.orderID = orderID          # Order ID
         self.clientID = clientID        # Client ID of order
@@ -55,6 +56,7 @@ class Order:
         self.quantity = quantity        # Quantity of order
         self.callback = callback        # Callback for the order
         self.type_ = type_              # Type of the order
+        self.market = market            # Market of the order
 
         if type_ is Enums.TYPE_MKT:     # <- Order is a market order
             self.locked_price = None    # Price used for locked order
@@ -203,6 +205,25 @@ class MarginAccountUSDM:
 
         # Remove amount
         self.wallet -= amount
+
+    # Funding fee interactions
+
+    def get_funding_amount(self, funding_rate: float):
+        """
+        Gets the funding fee for a specific funding rate
+
+        :param funding_rate:
+        :return: The funding fee
+        """
+        return self.size * self.mark_price * funding_rate
+    
+    def pay_funding_fee(self, funding_rate: float):
+        """
+        Pays/receives the funding fee
+
+        :param funding_rate:
+        """
+        self.wallet += self.get_funding_amount(funding_rate)
 
 # ----------------------------------- Binance Client -----------------------------------
 
@@ -399,7 +420,7 @@ class BinanceBroker:
         self.kline_streaming_symbols = {'spot': dict(), 'margin': dict()}  # { 'spot': { ..., 'symbols' : { ..., 'interval' : [ ..., (ID, callback), ... ], ... }, ... }, 'margin', { ... } }
 
         # List to store market orders
-        self.mkt_orders = []  # [ ..., order, ... ]
+        self.mkt_orders = {'spot': list(), 'margin': list()}  # [ ..., order, ... ]
 
         # Dictionary to store kline data
         self.klines = {'spot': dict(), 'margin': dict()}  # { "spot": { ..., 'symbols' : { ..., 'interval' : kline, ... }, "margin": { ... } }
@@ -412,13 +433,13 @@ class BinanceBroker:
         self.asset_balances = dict()  # { ..., clientID : { ..., 'asset' : (total_amount, locked_amount), ... }, ... }
 
         # Dictionaries to hold asks and bids
-        self.asks = dict()  # { ..., 'symbol' : { ..., price : [ ..., order, ... ], ... }, ... }
-        self.bids = dict()  # { ..., 'symbol' : { ..., price : [ ..., order, ... ], ... }, ... }
+        self.asks = {'spot': dict(), 'margin': dict()}  # { ..., 'symbol' : { ..., price : [ ..., order, ... ], ... }, ... }
+        self.bids = {'spot': dict(), 'margin': dict()}  # { ..., 'symbol' : { ..., price : [ ..., order, ... ], ... }, ... }
 
         # Initializing asks and bids
         for symbol in self.SPOT_SYMBOLS:
-            self.asks[symbol] = dict()
-            self.bids[symbol] = dict()
+            self.asks['spot'][symbol] = dict()
+            self.bids['spot'][symbol] = dict()
 
         # Dictionary that stores orderIDs and corresponding order objects (for use when deleting orders)
         self.orders = dict()  # { ..., orderID : order, ... }
@@ -932,7 +953,7 @@ class BinanceBroker:
         else:
             raise ValueError("Tried to get quantity in market that wasn't recognised: market={}".format(mkt))
 
-    # ----------------------------------- Order receiving -----------------------------------
+    # ----------------------------------- Spot Order receiving -----------------------------------
 
     def create_mkt_order(self, clientID: int, symbol: str, quantity, side, callback: Callable) -> int:
         """
@@ -947,7 +968,7 @@ class BinanceBroker:
         """
         # Create order object and increment orderID counter
         order = Order(orderID=self.orderID, clientID=clientID, type_=Enums.TYPE_MKT, side=side, symbol=symbol,
-                      quantity=quantity, callback=callback)
+                      quantity=quantity, callback=callback, market='spot')
         self.orderID += 1
 
         # Splits symbol
@@ -965,10 +986,10 @@ class BinanceBroker:
             raise ValueError("Tried to create market order with invalid order side: side={}".format(order.side))
 
         # Add to market orders list
-        self.mkt_orders.append(order)
+        self.mkt_orders['spot'].append(order)
 
         # Add order to orderID list
-        self.orders[order.orderID] = order
+        self.orders['spot'][order.orderID] = order
 
         # Creating logger row
         log_order = dict(orderID=self.orderID, clientID=clientID, type_=Enums.TYPE_MKT, side=side, symbol=symbol,
@@ -998,7 +1019,7 @@ class BinanceBroker:
         """
         # Create order object and increment orderID counter
         order = Order(orderID=self.orderID, clientID=clientID, type_=Enums.TYPE_LMT, side=side, symbol=symbol,
-                      quantity=quantity, price=lmt_price, callback=callback)
+                      quantity=quantity, price=lmt_price, callback=callback, market='spot')
         self.orderID += 1
 
         # Splits symbol
@@ -1016,27 +1037,27 @@ class BinanceBroker:
         # Add limit order to dictionaries
         if order.side == Enums.SIDE_BID:
             # If symbol not in bids dictionary add it
-            if symbol not in self.bids:
-                self.bids[symbol] = dict()
+            if symbol not in self.bids['spot']:
+                self.bids['spot'][symbol] = dict()
 
             # Adds order to bid dictionary
-            if order.lmt_price in self.bids[symbol]:
-                self.bids[symbol][order.lmt_price].append(order)
+            if order.lmt_price in self.bids['spot'][symbol]:
+                self.bids['spot'][symbol][order.lmt_price].append(order)
             else:
-                self.bids[symbol][order.lmt_price] = [order]
+                self.bids['spot'][symbol][order.lmt_price] = [order]
         elif order.side == Enums.SIDE_ASK:
             # If symbol not in asks dictionary add it
             if symbol not in self.asks:
-                self.asks[symbol] = dict()
+                self.asks['spot'][symbol] = dict()
 
             # Adds order to ask dictionary
             if order.lmt_price in self.asks[symbol]:
-                self.asks[symbol][order.lmt_price].append(order)
+                self.asks['spot'][symbol][order.lmt_price].append(order)
             else:
-                self.asks[symbol][order.lmt_price] = [order]
+                self.asks['spot'][symbol][order.lmt_price] = [order]
 
         # Add order to orderID list
-        self.orders[order.orderID] = order
+        self.orders['spot'][order.orderID] = order
 
         # Create logger row
         log_order = dict(orderID=self.orderID, clientID=clientID, type_=Enums.TYPE_LMT, side=side, symbol=symbol,
@@ -1051,6 +1072,22 @@ class BinanceBroker:
 
         # Return orderID or order
         return order.orderID
+
+    # ----------------------------------- Spot Order receiving -----------------------------------
+
+
+    def futures_create_order(self, symbol, type_, side, quantity, limit_price=None):
+        """
+        Used to create a futures order
+
+        :param symbol: The symbol of the order
+        :param type_: The type of the order ('LIMIT' or 'MARKET')
+        :param side: 'BUY' or 'SELL'
+        :param quantity: The quantity of the order
+        :param limit_price: If type_ is 'LIMIT' a limit price must be specified
+        :return: The orderID of the order
+        """
+        pass
 
     # ----------------------------------- Order Removing -----------------------------------
 
@@ -1080,24 +1117,24 @@ class BinanceBroker:
             # Order is a market order
             for i in range(len(self.mkt_orders)):
                 # If order is found remove it and return
-                if self.mkt_orders[i].orderID == order.orderID:
-                    self.mkt_orders.pop(i)
+                if self.mkt_orders[order.market][i].orderID == order.orderID:
+                    self.mkt_orders[order.market].pop(i)
                     return
         elif order.type_ == Enums.TYPE_LMT:
             # Order is a limit order
             if order.side == Enums.SIDE_BID:
                 # Iterate through bids to find order
-                for i in range(len(self.bids[order.symbol][order.lmt_price])):
+                for i in range(len(self.bids[order.market][order.symbol][order.lmt_price])):
                     # If order is found remove it and return
-                    if self.bids[order.symbol][order.lmt_price][i].orderID == order.orderID:
-                        self.bids[order.symbol][order.lmt_price].pop(i)
+                    if self.bids[order.market][order.symbol][order.lmt_price][i].orderID == order.orderID:
+                        self.bids[order.market][order.symbol][order.lmt_price].pop(i)
                         return
             elif order.side == Enums.SIDE_ASK:
                 # Iterate through asks to find order
                 for i in range(len(self.asks[order.symbol][order.lmt_price])):
                     # If order is found remove it and return
-                    if self.asks[order.symbol][order.lmt_price][i].orderID == order.orderID:
-                        self.asks[order.symbol][order.lmt_price].pop(i)
+                    if self.asks[order.market][order.symbol][order.lmt_price][i].orderID == order.orderID:
+                        self.asks[order.market][order.symbol][order.lmt_price].pop(i)
                         return
 
         # Remove order from orders list
