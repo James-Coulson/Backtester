@@ -24,7 +24,7 @@ class TestStrategy():
 
         :param data: kline
         """
-        self.binance.create_order(price=43600, type_=Enums.TYPE_LMT, side=Enums.SIDE_ASK, callback=self.executed, symbol="BTCUSDT", quantity=0.00001)
+        self.binance.create_order(price=43600, type_=Enums.TYPE_LMT, side=Enums.SIDE_BID, callback=self.executed, symbol="BTCUSDT", quantity=0.00001)
 
         print(data)
 
@@ -39,8 +39,8 @@ class TestStrategy():
 
         :param data: exec dict
         """
-        # print('Received execution')
-        # print(data)
+        print('Received execution')
+        print(data)
 
 
 if __name__ == '__main__':

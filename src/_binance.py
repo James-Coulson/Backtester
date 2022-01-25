@@ -35,8 +35,7 @@ class Order:
 
     # ----------------------------------- Initializing -----------------------------------
 
-    def __init__(self, callback: Callable, orderID: int, clientID: int, type_, side, symbol: str, quantity, market,
-                 price=None):
+    def __init__(self, callback: Callable, orderID: int, clientID: int, type_, side, symbol: str, quantity, price=None):
         """
         Initialize the Order object
 
@@ -47,7 +46,6 @@ class Order:
         :param symbol: Symbol of order (ie. BTCUSDT)
         :param quantity: Quantity of order (units)
         :param price: Limit price of order (only for limit orders)
-        :param market: The market of the order ('SPOT' or 'MARGIN')
         """
         self.orderID = orderID          # Order ID
         self.clientID = clientID        # Client ID of order
@@ -56,7 +54,6 @@ class Order:
         self.quantity = quantity        # Quantity of order
         self.callback = callback        # Callback for the order
         self.type_ = type_              # Type of the order
-        self.market = market            # Market of the order
 
         if type_ is Enums.TYPE_MKT:     # <- Order is a market order
             self.locked_price = None    # Price used for locked order
@@ -87,143 +84,6 @@ class Order:
         """
         self.locked_price = price
 
-# ------------------------------ Margin Account Data Structure ------------------------------
-
-
-class MarginAccountUSDM:
-    """
-    Internal class used to store information about a USD-M margin account
-    """
-    def __init__(self, symbol: str, size: float, entry_price: float, leverage: int, mark_price: float, wallet: float,
-                 main_rate: float, get_maintenance_rate: Callable):
-        """
-        Initializes the margin account
-
-        :param symbol: The symbol of the margin account
-        :param size: The size of the position in the margin account
-        :param entry_price: The entry price of the current position in the margin account
-        :param leverage: The leverage level of the current position
-        :param mark_price: The current mark price of the symbol
-        :param wallet: The current amount of margin in the account wallet
-        :param main_rate: The current maintenance rate
-        """
-        self.symbol = symbol
-        self.size = size
-        self.entry_price = entry_price
-        self.leverage = leverage
-        self.mark_price = mark_price
-        self.wallet = wallet
-        self.main_rate = main_rate
-
-    # Getters
-
-    def get_maintenance_margin(self):
-        """
-        Calculates and returns the maintenance amount
-
-        :return: The current maintenance amount
-        """
-        return self.mark_price * self.size * self.main_rate
-
-    def get_liq_price(self):
-        """
-        Calculates and returns the liquidation price of the current position
-
-        :return: The liquidation price of the current position
-        """
-        return (self.wallet + self.get_maintenance_margin() - self.size * self.entry_price) / \
-               (abs(self.size) * self.main_rate - self.size)
-
-    def get_pnl(self):
-        """
-        Calculates and returns the PnL of the margin account
-
-        :return: The PnL
-        """
-        return (self.mark_price - self.entry_price) * self.size
-
-    def get_max_removable(self):
-        """
-        Calculates and returns the maximum removable amount. From https://www.binance.com/en/support/faq/360038447311
-
-        :return: The maximum removable amount
-        """
-        min_comp = min(self.wallet - self.get_maintenance_margin(), self.wallet + self.size *
-                       (self.mark_price - self.entry_price) - self.mark_price * abs(self.size) * (1 / self.leverage))
-        return max(min_comp, 0)
-
-    def get_margin_balance(self):
-        """
-        Calculates and returns the margin balance
-
-        :return: The margin balance
-        """
-        return self.wallet + self.get_pnl()
-
-    # Setters
-
-    def set_mark_price(self, mark_price: float):
-        """
-        Sets the new mark_price of the margin account
-
-        :param mark_price: The new mark_price
-        """
-        self.mark_price = mark_price
-
-    def set_leverage(self, leverage: int):
-        """
-        Attempts to change the leverage of the margin account
-
-        :param leverage:
-        :return: True if change was successful, False otherwise
-        """
-        if self.size != 0 and self.leverage > leverage:
-            return False
-
-        self.leverage = leverage
-        return True
-
-    # Wallet Interactions
-
-    def add_to_wallet(self, amount):
-        """
-        Adds the specified amount of USDM to the wallet
-
-        :param amount: The amount to be added
-        """
-        self.wallet += amount
-
-    def remove_from_wallet(self, amount):
-        """
-        Attempts to remove the specified amount from the wallet
-
-        :param amount: Amount to be removed
-        """
-        # Check if it is possible to remove specified amount
-        if amount > self.get_max_removable():
-            raise ValueError("Tried to remove more than allowable from USD-M {} wallet".format(self.symbol))
-
-        # Remove amount
-        self.wallet -= amount
-
-    # Funding fee interactions
-
-    def get_funding_amount(self, funding_rate: float):
-        """
-        Gets the funding fee for a specific funding rate
-
-        :param funding_rate:
-        :return: The funding fee
-        """
-        return self.size * self.mark_price * funding_rate
-    
-    def pay_funding_fee(self, funding_rate: float):
-        """
-        Pays/receives the funding fee
-
-        :param funding_rate:
-        """
-        self.wallet += self.get_funding_amount(funding_rate)
 
 # ----------------------------------- Binance Client -----------------------------------
 
@@ -235,12 +95,9 @@ class BinanceClient:
 
     # ----------------------------------- Initializing -----------------------------------
 
-    def __init__(self, ID: int, start_kline_socket_: Callable,
+    def __init__(self, ID: int,
+                 start_kline_socket_: Callable,
                  stop_kline_socket_: Callable,
-                 start_kline_futures_socket_: Callable,
-                 stop_kline_futures_socket_: Callable,
-                 start_symbol_mark_price_socket_: Callable,
-                 stop_symbol_mark_price_socket_: Callable,
                  get_asset_balances_: Callable,
                  add_account_balance_: Callable,
                  create_mkt_order_: Callable,
@@ -258,10 +115,6 @@ class BinanceClient:
         # Saving Callables
         self._start_kline_socket_ = start_kline_socket_
         self._stop_kline_socket_ = stop_kline_socket_
-        self._start_kline_futures_socket_ = start_kline_futures_socket_
-        self._stop_kline_futures_socket_ = stop_kline_futures_socket_
-        self._start_symbol_mark_price_socket_ = start_symbol_mark_price_socket_
-        self._stop_symbol_mark_price_socket_ = stop_symbol_mark_price_socket_
         self._get_asset_balances_ = get_asset_balances_
         self._add_account_balance_ = add_account_balance_
         self._create_mkt_order_ = create_mkt_order_
@@ -285,44 +138,10 @@ class BinanceClient:
         """
         Uses callback function to stop kline socket
 
+        :param interval: Interval to stop streaming
         :param symbol: Symbol to be stopper being streamed
         """
         self._stop_kline_socket_(self.ID, symbol, interval)
-
-    def start_kline_futures_socket(self, symbol: str, callback: Callable, interval):
-        """
-        Uses callback function to start futures kline socket
-
-        :param symbol: Symbol to start socket
-        :param callback: Callback method to receive data
-        :param interval: Interval of when data is sent
-        """
-        self._start_kline_futures_socket_(self.ID, symbol, callback, interval)
-
-    def stop_kline_futures_socket(self, symbol: str):
-        """
-        Uses callback function to stop futures kline socket
-
-        :param symbol: Symbol to be stopper being streamed
-        """
-        self._stop_kline_futures_socket_(self.ID, symbol)
-
-    def start_symbol_mark_price_socket(self, symbol: str, callback: Callable):
-        """
-        Uses callback function to start mark price socket
-
-        :param symbol: Symbol to start socket
-        :param callback: Callback method to receive data
-        """
-        self._start_symbol_mark_price_socket_(self.ID, symbol, callback)
-
-    def stop_symbol_mark_price_socket(self, symbol: str):
-        """
-        Uses callback function to stop mark price socket
-
-        :param symbol: Symbol to be stopper being streamed
-        """
-        self._stop_symbol_mark_price_socket_(self.ID, symbol)
 
     # ----------------------------------- Account Balance Methods -----------------------------------
 
@@ -400,12 +219,10 @@ class BinanceBroker:
     # ----------------------------------- Exchange Constants -----------------------------------
 
     ASSETS = ['USDT', 'BTC', 'ADA', 'AUD']          # List of assets that can be traded on Binance
-    SPOT_SYMBOLS = ['BTCUSDT', 'ADAAUD']            # List of symbols that are available on Binance in the spot market
-    MARGIN_SYMBOLS = ['BTCUSDT']                    # List of symbols that are available on Binance in the margin market
+    SYMBOLS = ['BTCUSDT', 'ADAAUD']             # List of symbols that are available on Binance in the spot market
     COMMISSIONS = {'maker': 0.001, 'taker': 0.001}  # Dictionary for commissions
     INTERVALS = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '1d', '3d', '1w',
                  '1M']                              # Intervals offered by Binance
-    INTEREST_RATE = 0.0001                          # The interest rate used for the funding rate
 
     # ----------------------------------- Initializing -----------------------------------
 
@@ -417,13 +234,13 @@ class BinanceBroker:
         self.logger = logger
 
         # Dictionary to store kline streaming symbols
-        self.kline_streaming_symbols = {'spot': dict(), 'margin': dict()}  # { 'spot': { ..., 'symbols' : { ..., 'interval' : [ ..., (ID, callback), ... ], ... }, ... }, 'margin', { ... } }
+        self.kline_streaming_symbols = dict()  # { 'spot': { ..., 'symbols' : { ..., 'interval' : [ ..., (ID, callback), ... ], ... }, ... }, 'margin', { ... } }
 
         # List to store market orders
-        self.mkt_orders = {'spot': list(), 'margin': list()}  # [ ..., order, ... ]
+        self.mkt_orders = list()  # [ ..., order, ... ]
 
         # Dictionary to store kline data
-        self.klines = {'spot': dict(), 'margin': dict()}  # { "spot": { ..., 'symbols' : { ..., 'interval' : kline, ... }, "margin": { ... } }
+        self.klines = dict()  # { "spot": { ..., 'symbols' : { ..., 'interval' : kline, ... }, "margin": { ... } }
 
         # ID counters
         self.orderID = 0
@@ -433,13 +250,13 @@ class BinanceBroker:
         self.asset_balances = dict()  # { ..., clientID : { ..., 'asset' : (total_amount, locked_amount), ... }, ... }
 
         # Dictionaries to hold asks and bids
-        self.asks = {'spot': dict(), 'margin': dict()}  # { ..., 'symbol' : { ..., price : [ ..., order, ... ], ... }, ... }
-        self.bids = {'spot': dict(), 'margin': dict()}  # { ..., 'symbol' : { ..., price : [ ..., order, ... ], ... }, ... }
+        self.asks = dict()  # { ..., 'symbol' : { ..., price : [ ..., order, ... ], ... }, ... }
+        self.bids = dict()  # { ..., 'symbol' : { ..., price : [ ..., order, ... ], ... }, ... }
 
         # Initializing asks and bids
-        for symbol in self.SPOT_SYMBOLS:
-            self.asks['spot'][symbol] = dict()
-            self.bids['spot'][symbol] = dict()
+        for symbol in self.SYMBOLS:
+            self.asks[symbol] = dict()
+            self.bids[symbol] = dict()
 
         # Dictionary that stores orderIDs and corresponding order objects (for use when deleting orders)
         self.orders = dict()  # { ..., orderID : order, ... }
@@ -448,30 +265,13 @@ class BinanceBroker:
         self.commissions = dict()  # { ..., clientID : { ..., 'asset' :  commission, ... }, ... }
 
         # Dictionary to store trade data
-        self.trade_data = {'spot': dict(), 'margin': dict()}  # { "spot": { ..., 'symbol' : trade_dict, ... }, "margin": { ..., 'symbol' : trade_dict, ... } }
+        self.trade_data = dict()  # { "spot": { ..., 'symbol' : trade_dict, ... }, "margin": { ..., 'symbol' : trade_dict, ... } }
 
         # Get time callable
         self._get_time = _get_time
 
         # Dictionary to store intervals updated
-        self.klines_updated = {'spot': dict(), 'margin': dict()}  # { 'spot': { ..., symbol : [ ..., interval, ... ], ... }, 'margin': { ... } }
-
-        # ---- Margin Trading Variables ----
-
-        # Dictionary to store the current funding rates
-        self.funding_rates = dict()   # { ..., 'symbol': percentage, ... }
-
-        # Integer storing the next funding fee payment time
-        self.funding_fee_time = -1
-
-        # Dictionary to store mark price kline streaming sockets
-        self.mark_price_sockets = dict()    # { ..., 'symbol' : [ ..., (ID, callback), ... ], ... }
-
-        # Dictionary to store mark price klines
-        self.mark_price = dict()    # { ..., 'symbol': price, ... }
-
-        # List to store which mark prices have been updated
-        self.mark_price_updated = list()     # [ ..., symbol, ... ]
+        self.klines_updated = dict()  # { 'spot': { ..., symbol : [ ..., interval, ... ], ... }, 'margin': { ... } }
 
     # ----------------------------------- Obtaining Linked Client method -----------------------------------
 
@@ -484,16 +284,12 @@ class BinanceBroker:
         # Create BinanceClient
         client = BinanceClient(self.clientID, start_kline_socket_=self.start_kline_socket,
                                stop_kline_socket_=self.stop_kline_socket,
-                               start_kline_futures_socket_=self.start_kline_futures_socket,
-                               stop_kline_futures_socket_=self.stop_kline_futures_socket,
                                get_asset_balances_=self.get_asset_balances,
                                add_account_balance_=self.add_account_balance,
                                create_mkt_order_=self.create_mkt_order,
                                create_lmt_order_=self.create_lmt_order,
                                close_order_=self.close_order,
-                               get_commissions_=self.get_commissions,
-                               start_symbol_mark_price_socket_=self.start_symbol_mark_price_socket,
-                               stop_symbol_mark_price_socket_=self.stop_symbol_mark_price_socket)
+                               get_commissions_=self.get_commissions)
 
         # Increment clientID counter
         self.clientID += 1
@@ -645,8 +441,6 @@ class BinanceBroker:
 
     # ----------------------------------- Streaming market data -----------------------------------
 
-                                        # ------ Spot ------ #
-
     def start_kline_socket(self, clientID: int, symbol: str, callback: Callable, interval):
         """
         Called by BinanceClient to start a kline socket for spot market data
@@ -657,7 +451,7 @@ class BinanceBroker:
         :param interval: The interval of how often market data is streamed
         """
         # Check if symbol is available on Binance
-        if symbol not in self.SPOT_SYMBOLS:
+        if symbol not in self.SYMBOLS:
             raise ValueError("Tried to stream symbol that is not available on Binance")
 
         # Check interval is offered by Binance
@@ -666,15 +460,15 @@ class BinanceBroker:
                 "Tried to stream an interval that is not supported by Binance: interval={}".format(interval))
 
         # Add to streaming symbol
-        if symbol not in self.kline_streaming_symbols['spot']:
-            self.kline_streaming_symbols['spot'][symbol] = dict()
+        if symbol not in self.kline_streaming_symbols:
+            self.kline_streaming_symbols[symbol] = dict()
 
         # If interval isn't already being streamed add to dictionary
-        if interval not in self.kline_streaming_symbols['spot'][symbol]:
-            self.kline_streaming_symbols['spot'][symbol][interval] = list()
+        if interval not in self.kline_streaming_symbols[symbol]:
+            self.kline_streaming_symbols[symbol][interval] = list()
 
         # Add tuple to list
-        self.kline_streaming_symbols['spot'][symbol][interval].append((clientID, callback))
+        self.kline_streaming_symbols[symbol][interval].append((clientID, callback))
 
     def stop_kline_socket(self, clientID: int, symbol: str, interval: str):
         """
@@ -685,7 +479,7 @@ class BinanceBroker:
         :param symbol: Symbol to be stopped being streamed
         """
         # Checking symbol is being streamed
-        if symbol not in self.kline_streaming_symbols['spot']:
+        if symbol not in self.kline_streaming_symbols:
             raise ValueError("Tried to close socket of symbol that isn't being streamed")
 
         # Check interval is offered by Binance
@@ -702,256 +496,100 @@ class BinanceBroker:
                 sockets.pop(i)
                 break
 
-                                        # ------ Margin ------ #
-
-    def start_kline_futures_socket(self, clientID: int, symbol: str, callback: Callable, interval):
-        """
-        Called by BinanceClient to start futures kline socket
-
-        :param callback: Method to be called to send market data
-        :param clientID: Client who is initializing socket
-        :param symbol: Symbol to begin streaming
-        :param interval: The interval of how often market data is streamed
-        """
-        # Check if symbol is available on Binance
-        if symbol not in self.MARGIN_SYMBOLS:
-            raise ValueError("Tried to stream futures symbol that's not available on Binance: symbol={}".format(symbol))
-
-        # Check if interval is offered by binance
-        if interval not in self.INTERVALS:
-            raise ValueError(
-                "Tried to stream an interval that is not supported by Binance: interval={}".format(interval))
-
-        # Add to streaming symbols
-        if symbol not in self.kline_streaming_symbols['margin']:
-            self.kline_streaming_symbols['margin'][symbol] = dict()
-
-        # If interval isn't already being streamed add to dictionary
-        if interval not in self.kline_streaming_symbols['margin'][symbol]:
-            self.kline_streaming_symbols['margin'][symbol][interval] = list()
-
-        # Add tuple to list
-        self.kline_streaming_symbols['margin'][symbol][interval].append((clientID, callback))
-
-    def stop_kline_futures_socket(self, clientID: int, symbol: str, interval: str):
-        """
-        Called by BinanceClient to stop a stream of futures market data
-
-        :param interval: The interval to stop streaming
-        :param clientID: Client whose stopping stream
-        :param symbol: Symbol to be stopped being streamed
-        """
-        # Checking symbol is being streamed
-        if symbol not in self.kline_streaming_symbols['margin']:
-            raise ValueError("Tried to close socket of symbol that isn't being streamed")
-
-        # Check interval is offered by Binance
-        if interval not in self.INTERVALS:
-            raise ValueError(
-                "Tried to stream an interval that is not supported by Binance: interval={}".format(interval))
-
-        # Get sockets for given symbol
-        sockets = self.kline_streaming_symbols['margin'][symbol][interval]
-
-        # Iterate through streaming list to find stream
-        for i in range(len(sockets)):
-            if sockets[i][0] == clientID:
-                sockets.pop(i)
-                break
-
-                                # ------ Mark Price Streaming ------ #
-
-    def start_symbol_mark_price_socket(self, clientID: int, symbol: str, callback: Callable):
-        """
-        Called by BinanceClient to create a socket to stream Mark Price
-
-        :param clientID: Client who is initializing socket
-        :param symbol: The symbol to be streamed
-        :param callback: Callback method to give market data
-        """
-        # Check if symbol is offered by Binance
-        if symbol not in self.MARGIN_SYMBOLS:
-            raise ValueError("Tried to stream futures mark price for symbol that's not available on Binance: "
-                             "symbol={}".format(symbol))
-
-        # Add to streaming symbols
-        if symbol not in self.mark_price_sockets:
-            self.mark_price_sockets[symbol] = list()
-
-        # Add tuple to list
-        self.mark_price_sockets[symbol].append((clientID, callback))
-
-    def stop_symbol_mark_price_socket(self, clientID: int, symbol: str):
-        """
-        Called by BinanceBroker to stop a stream of mark price data
-
-        :param clientID: Client who initialized socket
-        :param symbol: The symbol being streamed
-        """
-        # Check if symbol is offered by Binance
-        if symbol not in self.MARGIN_SYMBOLS:
-            raise ValueError("Tried to stream futures mark price for symbol that's not available on Binance: "
-                             "symbol={}".format(symbol))
-
-        # Get sockets for a given symbol
-        sockets = self.mark_price_sockets[symbol]
-
-        # Iterate through streaming list to find stream
-        for i in range(len(sockets)):
-            if sockets[i][0] == clientID:
-                sockets.pop(i)
-                break
-
-                             # ------ Backtester Streaming Method ------ #
+    # ----------------------------------- Backtester streaming method -----------------------------------
 
     def send_mkt_data(self):
         """
         Called by Backtester to send market data to sockets
-
-        :param symbol: Symbol whose market data has been updated
         """
-        # Iterate through updated mark price/funding rate symbols
-        for symbol in self.mark_price_updated:
-            # Create return dictionary
-            mark_price_dict = dict()
-            mark_price_dict['symbol'] = symbol
-
-            mark_price_dict['mark price'] = self.mark_price[symbol]
-            mark_price_dict['funding rate'] = self.funding_rates[symbol]
-
-            # Get sockets
-            sockets = self.mark_price_sockets[symbol]
-
-            # Iterating to through sockets
-            for _tuple in sockets:
-                _tuple[1](mark_price_dict)
-
-        self.mark_price_updated = list()
-
         # Iterate through updated spot symbols
-        for symbol in self.klines_updated['spot']:
+        for symbol in self.klines_updated:
             # Iterate through updated intervals
-            for interval in self.klines_updated['spot'][symbol]:
+            for interval in self.klines_updated[symbol]:
                 # Checks if symbol and interval are being streamed
-                if symbol not in self.kline_streaming_symbols['spot']:
+                if symbol not in self.kline_streaming_symbols:
                     continue
-                if interval not in self.kline_streaming_symbols['spot'][symbol]:
+                if interval not in self.kline_streaming_symbols[symbol]:
                     continue
 
                 # Get sockets
-                sockets = self.kline_streaming_symbols['spot'][symbol][interval]
+                sockets = self.kline_streaming_symbols[symbol][interval]
 
                 # Get kline data dictionary
-                mkt_data = self.klines['spot'][symbol][interval]
+                mkt_data = self.klines[symbol][interval]
 
                 # Use callback to send dict to strategies
                 for _tuple in sockets:
                     _tuple[1](mkt_data)
 
         # Iterate through updated margin symbols
-        for symbol in self.klines_updated['margin']:
+        for symbol in self.klines_updated:
             # Iterate through updated intervals
-            for interval in self.klines_updated['margin'][symbol]:
+            for interval in self.klines_updated[symbol]:
                 # Checks if symbol and interval are being streamed
-                if symbol not in self.kline_streaming_symbols['margin']:
+                if symbol not in self.kline_streaming_symbols:
                     continue
-                if interval not in self.kline_streaming_symbols['margin'][symbol]:
+                if interval not in self.kline_streaming_symbols[symbol]:
                     continue
 
                 # Get sockets
-                sockets = self.kline_streaming_symbols['margin'][symbol][interval]
+                sockets = self.kline_streaming_symbols[symbol][interval]
 
                 # Get kline data dictionary
-                mkt_data = self.klines['margin'][symbol][interval]
+                mkt_data = self.klines[symbol][interval]
 
                 # Use callback to send dict to strategies
                 for _tuple in sockets:
                     _tuple[1](mkt_data)
 
         # Clear self.klines_updated
-        self.klines_updated = {'spot': dict(), 'margin': dict()}
+        self.klines_updated = dict()
 
     # ----------------------------------- Internal market data methods -----------------------------------
 
-    def get_price(self, symbol: str, mkt: str):
+    def get_price(self, symbol: str):
         """
         Internal method to get the price of symbol.
 
-        :param mkt: 'spot' for price in spot market, 'margin' for price in margin market
         :param symbol: Symbol of price that is needed
         :return: Price of symbol if market data is available and -1 otherwise
         """
         # If price in spot market is wanted
-        if mkt == 'spot':
-            # Symbol not on Binance
-            if symbol not in self.SPOT_SYMBOLS:
-                raise ValueError("Tried to get price of symbol not on Binance: symbol={}".format(symbol))
+        if symbol not in self.SYMBOLS:
+            raise ValueError("Tried to get price of symbol not on Binance: symbol={}".format(symbol))
 
-            # No market data available
-            if symbol not in self.trade_data[mkt]:
-                raise ValueError("Tried to get price of symbol on binance that hasn't been updated: symbol={}".format(
-                    symbol))
+        # No market data available
+        if symbol not in self.trade_data:
+            raise ValueError("Tried to get price of symbol on binance that hasn't been updated: symbol={}".format(
+                symbol))
 
-            # Returns open price
-            return self.trade_data[mkt][symbol]['price']
-        elif mkt == 'margin':   # If price from marking market is wanted
-            # Symbol not on Binance
-            if symbol not in self.MARGIN_SYMBOLS:
-                raise ValueError("Tried to get price of symbol not on Binance: symbol={}".format(symbol))
+        # Returns open price
+        return self.trade_data[symbol]['price']
 
-            # No market data available
-            if symbol not in self.trade_data[mkt]:
-                raise ValueError("Tried to get price of symbol on binance that hasn't been updated: symbol={}".format(
-                    symbol))
-
-            # Returns open price
-            return self.trade_data[mkt][symbol]['price']
-        else:
-            raise ValueError("Tried ot get price in market that wasn't recognised: market={}".format(mkt))
-
-    def get_quantity(self, symbol: str, mkt: str, quote=False):
+    def get_quantity(self, symbol: str, quote=False):
         """
         Used to get the quantity traded
 
-        :param mkt: 'spot' for price in spot market, 'margin' for price in margin market
         :param symbol: The symbol to get the data for
         :param quote: If the quantity or the quoted quantity is returned (default: False)
         :return: The quantity traded and -1 if no data is available
         """
-        # If price in spot market is wanted
-        if mkt == 'spot':
-            # Symbol not on Binance
-            if symbol not in self.SPOT_SYMBOLS:
-                raise ValueError("Tried to get quantity of symbol not on Binance: symbol={}".format(symbol))
+        # # If price in spot market is wanted
+        # if mkt == 'spot':
+        # Symbol not on Binance
+        if symbol not in self.SYMBOLS:
+            raise ValueError("Tried to get quantity of symbol not on Binance: symbol={}".format(symbol))
 
-            # No market data available
-            if symbol not in self.trade_data[mkt]:
-                raise ValueError("Tried to get quantity of symbol on binance that hasn't been updated: symbol={}".format(
-                    symbol))
+        # No market data available
+        if symbol not in self.trade_data:
+            raise ValueError("Tried to get quantity of symbol on binance that hasn't been updated: symbol={}".format(
+                symbol))
 
-            # Return quantity
-            if quote is False:
-                return self.trade_data[mkt][symbol]['quantity']
-            else:
-                return self.trade_data[mkt][symbol]['quoteQty']
-        elif mkt == 'margin':  # If price from marking market is wanted
-            # Symbol not on Binance
-            if symbol not in self.MARGIN_SYMBOLS:
-                raise ValueError("Tried to get quantity of symbol not on Binance: symbol={}".format(symbol))
+        # Return quantity
+        if quote is False:
+            return self.trade_data[symbol]['quantity']
 
-            # No market data available
-            if symbol not in self.trade_data[mkt]:
-                raise ValueError(
-                    "Tried to get quantity of symbol on binance that hasn't been updated: symbol={}".format(
-                        symbol))
-
-            # Return quantity
-            if quote is False:
-                return self.trade_data[mkt][symbol]['quantity']
-            else:
-                return self.trade_data[mkt][symbol]['quoteQty']
-        else:
-            raise ValueError("Tried to get quantity in market that wasn't recognised: market={}".format(mkt))
+        return self.trade_data[symbol]['quoteQty']
 
     # ----------------------------------- Spot Order receiving -----------------------------------
 
@@ -968,7 +606,7 @@ class BinanceBroker:
         """
         # Create order object and increment orderID counter
         order = Order(orderID=self.orderID, clientID=clientID, type_=Enums.TYPE_MKT, side=side, symbol=symbol,
-                      quantity=quantity, callback=callback, market='spot')
+                      quantity=quantity, callback=callback)
         self.orderID += 1
 
         # Splits symbol
@@ -978,18 +616,18 @@ class BinanceBroker:
         # - For now the case where no market data is available is ignored
         if order.side == Enums.SIDE_BID:
             self.change_locked_asset_balance(clientID=order.clientID, asset=assets[0],
-                                             change=order.get_value(price=self.get_price(symbol=symbol, mkt='mkt')))
-            order.set_price(price=self.get_price(symbol=symbol, mkt='mkt'))
+                                             change=order.get_value(price=self.get_price(symbol=symbol)))
+            order.set_price(price=self.get_price(symbol=symbol))
         elif order.side == Enums.SIDE_ASK:
             self.change_locked_asset_balance(clientID=order.clientID, asset=assets[1], change=order.quantity)
         else:
             raise ValueError("Tried to create market order with invalid order side: side={}".format(order.side))
 
         # Add to market orders list
-        self.mkt_orders['spot'].append(order)
+        self.mkt_orders.append(order)
 
         # Add order to orderID list
-        self.orders['spot'][order.orderID] = order
+        self.orders[order.orderID] = order
 
         # Creating logger row
         log_order = dict(orderID=self.orderID, clientID=clientID, type_=Enums.TYPE_MKT, side=side, symbol=symbol,
@@ -1019,7 +657,7 @@ class BinanceBroker:
         """
         # Create order object and increment orderID counter
         order = Order(orderID=self.orderID, clientID=clientID, type_=Enums.TYPE_LMT, side=side, symbol=symbol,
-                      quantity=quantity, price=lmt_price, callback=callback, market='spot')
+                      quantity=quantity, price=lmt_price, callback=callback)
         self.orderID += 1
 
         # Splits symbol
@@ -1037,27 +675,27 @@ class BinanceBroker:
         # Add limit order to dictionaries
         if order.side == Enums.SIDE_BID:
             # If symbol not in bids dictionary add it
-            if symbol not in self.bids['spot']:
-                self.bids['spot'][symbol] = dict()
+            if symbol not in self.bids:
+                self.bids[symbol] = dict()
 
             # Adds order to bid dictionary
-            if order.lmt_price in self.bids['spot'][symbol]:
-                self.bids['spot'][symbol][order.lmt_price].append(order)
+            if order.lmt_price in self.bids[symbol]:
+                self.bids[symbol][order.lmt_price].append(order)
             else:
-                self.bids['spot'][symbol][order.lmt_price] = [order]
+                self.bids[symbol][order.lmt_price] = [order]
         elif order.side == Enums.SIDE_ASK:
             # If symbol not in asks dictionary add it
             if symbol not in self.asks:
-                self.asks['spot'][symbol] = dict()
+                self.asks[symbol] = dict()
 
             # Adds order to ask dictionary
             if order.lmt_price in self.asks[symbol]:
-                self.asks['spot'][symbol][order.lmt_price].append(order)
+                self.asks[symbol][order.lmt_price].append(order)
             else:
-                self.asks['spot'][symbol][order.lmt_price] = [order]
+                self.asks[symbol][order.lmt_price] = [order]
 
         # Add order to orderID list
-        self.orders['spot'][order.orderID] = order
+        self.orders[order.orderID] = order
 
         # Create logger row
         log_order = dict(orderID=self.orderID, clientID=clientID, type_=Enums.TYPE_LMT, side=side, symbol=symbol,
@@ -1072,22 +710,6 @@ class BinanceBroker:
 
         # Return orderID or order
         return order.orderID
-
-    # ----------------------------------- Spot Order receiving -----------------------------------
-
-
-    def futures_create_order(self, symbol, type_, side, quantity, limit_price=None):
-        """
-        Used to create a futures order
-
-        :param symbol: The symbol of the order
-        :param type_: The type of the order ('LIMIT' or 'MARKET')
-        :param side: 'BUY' or 'SELL'
-        :param quantity: The quantity of the order
-        :param limit_price: If type_ is 'LIMIT' a limit price must be specified
-        :return: The orderID of the order
-        """
-        pass
 
     # ----------------------------------- Order Removing -----------------------------------
 
@@ -1117,24 +739,24 @@ class BinanceBroker:
             # Order is a market order
             for i in range(len(self.mkt_orders)):
                 # If order is found remove it and return
-                if self.mkt_orders[order.market][i].orderID == order.orderID:
-                    self.mkt_orders[order.market].pop(i)
+                if self.mkt_orders[i].orderID == order.orderID:
+                    self.mkt_orders.pop(i)
                     return
         elif order.type_ == Enums.TYPE_LMT:
             # Order is a limit order
             if order.side == Enums.SIDE_BID:
                 # Iterate through bids to find order
-                for i in range(len(self.bids[order.market][order.symbol][order.lmt_price])):
+                for i in range(len(self.bids[order.symbol][order.lmt_price])):
                     # If order is found remove it and return
-                    if self.bids[order.market][order.symbol][order.lmt_price][i].orderID == order.orderID:
-                        self.bids[order.market][order.symbol][order.lmt_price].pop(i)
+                    if self.bids[order.symbol][order.lmt_price][i].orderID == order.orderID:
+                        self.bids[order.symbol][order.lmt_price].pop(i)
                         return
             elif order.side == Enums.SIDE_ASK:
                 # Iterate through asks to find order
                 for i in range(len(self.asks[order.symbol][order.lmt_price])):
                     # If order is found remove it and return
-                    if self.asks[order.market][order.symbol][order.lmt_price][i].orderID == order.orderID:
-                        self.asks[order.market][order.symbol][order.lmt_price].pop(i)
+                    if self.asks[order.symbol][order.lmt_price][i].orderID == order.orderID:
+                        self.asks[order.symbol][order.lmt_price].pop(i)
                         return
 
         # Remove order from orders list
@@ -1266,15 +888,14 @@ class BinanceBroker:
 
     # ----------------------------------- Order checking -----------------------------------
 
-    def check_orders(self, symbol: str, mkt: str):
+    def check_orders(self, symbol: str):
         """
         Called by the backtester to check orders
 
-        :param mkt: Whether the "spot" or "margin" market orders are checked
         :param symbol: Symbol that was most recently updated
         """
         # Get price of symbol
-        price = self.get_price(symbol, mkt=mkt)
+        price = self.get_price(symbol)
 
         # Get valid bids and asks
         valid_asks = None
@@ -1336,68 +957,32 @@ class BinanceBroker:
 
     # ----------------------------------- Updating market data -----------------------------------
 
-    def update_trade_data(self, trade_data: dict, mkt: str):
+    def update_trade_data(self, trade_data: dict):
         """
         Called by Backtester
 
-        :param mkt: Whether the market is "spot" or "margin"
         :param trade_data: The trade dictionary
         """
-        self.trade_data[mkt][trade_data['symbol']] = trade_data
+        self.trade_data[trade_data['symbol']] = trade_data
 
-    def update_klines(self, symbol: str, interval: str, kline: dict, mkt: str):
+    def update_klines(self, symbol: str, interval: str, kline: dict):
         """
         Called by Backtester to update the market data for a given symbol
 
         :param interval: The interval being updated
         :param symbol: Symbol whose market data is being updated
         :param kline: Dictionary of updated market data
-        :param mkt: Whether the market is "spot" or "margin"
         """
         # Check if symbol is in self.klines
-        if symbol not in self.klines[mkt]:
-            self.klines[mkt][symbol] = dict()
+        if symbol not in self.klines:
+            self.klines[symbol] = dict()
 
         # Store kline
-        self.klines[mkt][symbol][interval] = kline
+        self.klines[symbol][interval] = kline
 
         # Check if symbol is in updated dictionary
-        if symbol not in self.klines_updated[mkt]:
-            self.klines_updated[mkt][symbol] = []
+        if symbol not in self.klines_updated:
+            self.klines_updated[symbol] = []
 
         # Add updated kline to updated dictionary
-        self.klines_updated[mkt][symbol].append(interval)
-
-    def update_mark_price(self, symbol: str, price):
-        """
-        Called by Backtester to update a mark price
-
-        :param symbol: Symbol whose market data is being updated
-        :param price: Most recent mark price
-        """
-        # Store kline
-        self.mark_price[symbol] = price
-
-        # Check if symbol is in updated dictionary
-        if symbol in self.mark_price_updated:
-            return
-
-        # Add updated kline to updated dictionary
-        self.mark_price_updated.append(symbol)
-
-    def update_funding_rate(self, symbol: str, premium_rate):
-        """
-        Called by the Backtester to update the funding rate of a specific symbol
-
-        :param symbol: The symbol whose funding rate is being updated
-        :param premium_rate: The new premium rate
-        """
-        # Update new funding rate
-        self.funding_rates[symbol] = round(premium_rate + clamp(self.INTEREST_RATE - premium_rate, min_value=-0.0005, max_value=0.0005), 8)
-
-        # Check if symbol is in updated dictionary
-        if symbol in self.mark_price_updated:
-            return
-
-        # Add updated kline to updated dictionary
-        self.mark_price_updated.append(symbol)
+        self.klines_updated[symbol].append(interval)

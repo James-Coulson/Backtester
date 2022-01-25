@@ -175,7 +175,7 @@ class Backtester:
                 self.send_trade_data_to_binance(row=row)
 
                 # Check orders in binance
-                self.brokers['binance'].check_orders(symbol=row['symbol'], mkt="spot")
+                self.brokers['binance'].check_orders(symbol=row['symbol'])
 
                 # Incrementing trade_num
                 trade_num += 1
@@ -217,7 +217,7 @@ class Backtester:
         mkt_data['symbol'] = row['symbol']
 
         # Give data to BinanceBroker
-        self.brokers['binance'].update_klines(symbol=row['symbol'], kline=mkt_data, interval=row['interval'], mkt="spot")
+        self.brokers['binance'].update_klines(symbol=row['symbol'], kline=mkt_data, interval=row['interval'])
 
     # ----------------------------------- Sending Trade Data ----------------------------------------
 
@@ -234,7 +234,7 @@ class Backtester:
         trade_data["qty"] = row["qty"]
 
         # Send trade data to BinanceBroker
-        self.brokers['binance'].update_trade_data(trade_data, mkt="spot")
+        self.brokers['binance'].update_trade_data(trade_data)
 
     # ----------------------------------- Downloading Data -----------------------------------
 
