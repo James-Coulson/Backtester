@@ -219,7 +219,7 @@ class BinanceBroker:
     # ----------------------------------- Exchange Constants -----------------------------------
 
     ASSETS = ['USDT', 'BTC', 'ADA', 'AUD']          # List of assets that can be traded on Binance
-    SYMBOLS = ['BTCUSDT', 'ADAAUD']             # List of symbols that are available on Binance in the spot market
+    SYMBOLS = ['BTCUSDT', 'ADAAUD']                 # List of symbols that are available on Binance in the spot market
     COMMISSIONS = {'maker': 0.001, 'taker': 0.001}  # Dictionary for commissions
     INTERVALS = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '1d', '3d', '1w',
                  '1M']                              # Intervals offered by Binance
@@ -229,6 +229,9 @@ class BinanceBroker:
     def __init__(self, _get_time: Callable, logger: Logger):
         """
         Used to initialize the BinanceBroker.
+
+        :param _get_time: Callable to get current time from Backtester
+        :param logger: Access to the logger object
         """
         # Access to the Logger
         self.logger = logger
@@ -240,7 +243,7 @@ class BinanceBroker:
         self.mkt_orders = list()  # [ ..., order, ... ]
 
         # Dictionary to store kline data
-        self.klines = dict()  # { "spot": { ..., 'symbols' : { ..., 'interval' : kline, ... }, "margin": { ... } }
+        self.klines = dict()  # { ..., 'symbols' : { ..., 'interval' : kline, ... }
 
         # ID counters
         self.orderID = 0
@@ -265,13 +268,13 @@ class BinanceBroker:
         self.commissions = dict()  # { ..., clientID : { ..., 'asset' :  commission, ... }, ... }
 
         # Dictionary to store trade data
-        self.trade_data = dict()  # { "spot": { ..., 'symbol' : trade_dict, ... }, "margin": { ..., 'symbol' : trade_dict, ... } }
+        self.trade_data = dict()  # { ..., 'symbol' : trade_dict, ... }
 
         # Get time callable
         self._get_time = _get_time
 
         # Dictionary to store intervals updated
-        self.klines_updated = dict()  # { 'spot': { ..., symbol : [ ..., interval, ... ], ... }, 'margin': { ... } }
+        self.klines_updated = dict()  # { ..., symbol : [ ..., interval, ... ], ... }
 
     # ----------------------------------- Obtaining Linked Client method -----------------------------------
 
@@ -488,7 +491,7 @@ class BinanceBroker:
                 "Tried to stream an interval that is not supported by Binance: interval={}".format(interval))
 
         # Get sockets for given symbol
-        sockets = self.kline_streaming_symbols['spot'][symbol][interval]
+        sockets = self.kline_streaming_symbols[symbol][interval]
 
         # Iterate through streaming list to find stream
         for i in range(len(sockets)):
@@ -502,7 +505,7 @@ class BinanceBroker:
         """
         Called by Backtester to send market data to sockets
         """
-        # Iterate through updated spot symbols
+        # Iterate through updated symbols
         for symbol in self.klines_updated:
             # Iterate through updated intervals
             for interval in self.klines_updated[symbol]:
@@ -521,26 +524,26 @@ class BinanceBroker:
                 # Use callback to send dict to strategies
                 for _tuple in sockets:
                     _tuple[1](mkt_data)
-
-        # Iterate through updated margin symbols
-        for symbol in self.klines_updated:
-            # Iterate through updated intervals
-            for interval in self.klines_updated[symbol]:
-                # Checks if symbol and interval are being streamed
-                if symbol not in self.kline_streaming_symbols:
-                    continue
-                if interval not in self.kline_streaming_symbols[symbol]:
-                    continue
-
-                # Get sockets
-                sockets = self.kline_streaming_symbols[symbol][interval]
-
-                # Get kline data dictionary
-                mkt_data = self.klines[symbol][interval]
-
-                # Use callback to send dict to strategies
-                for _tuple in sockets:
-                    _tuple[1](mkt_data)
+        #
+        # # Iterate through updated margin symbols
+        # for symbol in self.klines_updated:
+        #     # Iterate through updated intervals
+        #     for interval in self.klines_updated[symbol]:
+        #         # Checks if symbol and interval are being streamed
+        #         if symbol not in self.kline_streaming_symbols:
+        #             continue
+        #         if interval not in self.kline_streaming_symbols[symbol]:
+        #             continue
+        #
+        #         # Get sockets
+        #         sockets = self.kline_streaming_symbols[symbol][interval]
+        #
+        #         # Get kline data dictionary
+        #         mkt_data = self.klines[symbol][interval]
+        #
+        #         # Use callback to send dict to strategies
+        #         for _tuple in sockets:
+        #             _tuple[1](mkt_data)
 
         # Clear self.klines_updated
         self.klines_updated = dict()
